@@ -14,7 +14,18 @@ namespace WalkSimulator.Animators
     {
         public enum Emote { Wave, Point, ThumbsUp, ThumbsDown, Shrug, Dance }
         public Emote emote;
+        public AnimatorBase returnTo;
         float startTime;
+
+        // Go back to whatever you were doing before the emote
+        public void Stop() => Rig.Instance.Animator = returnTo ? returnTo : Plugin.Instance.walkAnimator;
+
+        void Update()
+        {
+            // Moving cancels the emote
+            if (InputHandler.inputDirection != Vector3.zero)
+                Stop();
+        }
         Func<HandDriver, float, HandPositionInfo> handPositioner;
 
         public override void Animate()

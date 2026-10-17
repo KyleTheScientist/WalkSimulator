@@ -42,11 +42,14 @@ namespace WalkSimulator.Animators
             }
         }
 
+        float sprintMultiplier = 3;
+        float CurrentSpeed => Keyboard.current.leftShiftKey.isPressed ? speed * sprintMultiplier : speed;
+
         void AnimateBody()
         {
             rig.active = true;
             rig.useGravity = false;
-            rig.targetPosition = body.TransformPoint(InputHandler.inputDirection * speed);
+            rig.targetPosition = body.TransformPoint(InputHandler.inputDirection * CurrentSpeed);
         }
 
         void AnimateHands()

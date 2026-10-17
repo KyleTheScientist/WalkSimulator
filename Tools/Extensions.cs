@@ -30,6 +30,14 @@ namespace WalkSimulator.Tools
             return GorillaTagger.Instance.thirdPersonCamera.GetComponentInChildren<Camera>();
         }
 
+        public static string GetPath(this Transform self)
+        {
+            string path = self.name;
+            for (var parent = self.parent; parent; parent = parent.parent)
+                path = parent.name + "/" + path;
+            return path;
+        }
+
         public static float Distance(this Vector3 self, Vector3 other)
         {
             return Vector3.Distance(self, other);

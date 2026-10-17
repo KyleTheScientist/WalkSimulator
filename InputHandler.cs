@@ -54,6 +54,17 @@ namespace WalkSimulator
         void EnableEmote(EmoteAnimator.Emote emote)
         {
             var animator = Plugin.Instance.emoteAnimator as EmoteAnimator;
+            if (Rig.Instance.Animator == animator)
+            {
+                // Pressing the same emote again stops it
+                if (animator.emote == emote)
+                {
+                    animator.Stop();
+                    return;
+                }
+            }
+            else
+                animator.returnTo = Rig.Instance.Animator;
             Rig.Instance.Animator = animator;
             animator.emote = emote;
         }
