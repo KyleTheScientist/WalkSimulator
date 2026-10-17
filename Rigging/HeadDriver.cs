@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using UnityEngine.InputSystem;
 using UnityEngine;
-using Thirpy = Cinemachine.Cinemachine3rdPersonFollow;
+using Thirpy = Unity.Cinemachine.CinemachineThirdPersonFollow;
 using GorillaLocomotion;
 
 namespace WalkSimulator.Rigging
@@ -47,9 +47,9 @@ namespace WalkSimulator.Rigging
         }
         void Start()
         {
-            var thirpy = FindObjectOfType<Thirpy>();
-            thirpyTarget = thirpy.VirtualCamera.Follow;
-            var shoulderCamera = thirpy.gameObject.GetComponentInParent<Camera>();
+            var thirpy = FindAnyObjectByType<Thirpy>();
+            thirpyTarget = thirpy.FollowTarget;
+            var shoulderCamera = WalkSimulator.Tools.Extensions.ShoulderCamera();
             //cosmeticsTransform = GorillaTagger.Instance.mainCamera.transform.Find("Cosmetics");
 
             cameraObject = Plugin.Instance.bundle.LoadAsset<GameObject>("Override Camera");
@@ -66,14 +66,14 @@ namespace WalkSimulator.Rigging
 
         void LateUpdate()
         {
-            cameraObject.transform.position = Player.Instance.headCollider.transform.TransformPoint(offset);
+            cameraObject.transform.position = GTPlayer.Instance.headCollider.transform.TransformPoint(offset);
             cameraObject.transform.forward = head.forward;
 
             // Turn the camera with the mouse
             if (turn)
             {
                 // Horizontal Axis
-                Player.Instance.Turn(Mouse.current.delta.value.x / 10f);
+                GTPlayer.Instance.Turn(Mouse.current.delta.value.x / 10f);
 
                 //Vertical Axis
                 var angles = GorillaTagger.Instance.offlineVRRig.headConstraint.eulerAngles;
@@ -87,7 +87,7 @@ namespace WalkSimulator.Rigging
                 //head.localEulerAngles = angles;
                 //Camera.main.transform.localEulerAngles = angles;
                 thirpyTarget.localEulerAngles = new Vector3(angles.x, 0, 0);
-                Player.Instance.headCollider.transform.localEulerAngles = new Vector3(angles.x, 0, 0);
+                GTPlayer.Instance.headCollider.transform.localEulerAngles = new Vector3(angles.x, 0, 0);
             }
         }
 

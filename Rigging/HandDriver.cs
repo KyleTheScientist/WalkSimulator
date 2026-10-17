@@ -33,9 +33,7 @@ namespace WalkSimulator.Rigging
             defaultOffset = new Vector3(isLeft ? -.25f : .25f, -.45f, .2f);
             head = Rig.Instance.head;
             body = Rig.Instance.body;
-            controller = isLeft ?
-                Player.Instance.leftControllerTransform :
-                Player.Instance.rightControllerTransform;
+            controller = GTPlayer.Instance.GetControllerTransform(isLeft);
             handMap = isLeft ?
                 GorillaTagger.Instance.offlineVRRig.leftHand :
                 GorillaTagger.Instance.offlineVRRig.rightHand;

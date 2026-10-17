@@ -20,7 +20,7 @@ namespace WalkSimulator.Animators
 
         void Awake()
         {
-            layersBackup = Player.Instance.locomotionEnabledLayers;
+            layersBackup = GTPlayer.Instance.locomotionEnabledLayers;
         }
 
         public override void Animate()
@@ -36,9 +36,9 @@ namespace WalkSimulator.Animators
             if(Keyboard.current.nKey.wasPressedThisFrame)
             {
                 noClipActive = !noClipActive;
-                Player.Instance.locomotionEnabledLayers = noClipActive ? 1 << 29 : layersBackup;
-                Player.Instance.headCollider.isTrigger = noClipActive;
-                Player.Instance.bodyCollider.isTrigger = noClipActive;
+                GTPlayer.Instance.locomotionEnabledLayers = noClipActive ? 1 << 29 : layersBackup;
+                GTPlayer.Instance.headCollider.isTrigger = noClipActive;
+                GTPlayer.Instance.bodyCollider.isTrigger = noClipActive;
             }
         }
 
@@ -64,7 +64,7 @@ namespace WalkSimulator.Animators
         {
             base.Cleanup();
             leftHand.followRate = rightHand.followRate = .1f;
-            Player.Instance.locomotionEnabledLayers = layersBackup;
+            GTPlayer.Instance.locomotionEnabledLayers = layersBackup;
         }
 
         public override void Setup()

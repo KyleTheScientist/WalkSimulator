@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Utilla;
+using Utilla.Attributes;
 using WalkSimulator.Animators;
 using WalkSimulator.Menus;
 using WalkSimulator.Rigging;
@@ -96,7 +97,7 @@ namespace WalkSimulator
                 Logging.Exception(e);
             }
 
-            bundle = AssetUtils.LoadAssetBundle("WalkSimulator/assetbundle");            
+            bundle = Tools.AssetUtils.LoadAssetBundle("WalkSimulator/assetbundle");            
         }
 
         void Start()
@@ -107,7 +108,7 @@ namespace WalkSimulator
         }
 
         [ModdedGamemodeLeave]
-        void ModdedRoomLeft(string _) => PhotonNetworkController.Instance.AttemptDisconnect();
+        void ModdedRoomLeft(string _) => NetworkSystem.Instance.ReturnToSinglePlayer();
 
         private void OnRoomLeft(object sender, Events.RoomJoinedArgs e)
         {
@@ -132,7 +133,7 @@ namespace WalkSimulator
 
         void OnGameInitialized(object sender, EventArgs e)
         {
-            string platform = (string)Traverse.Create(GorillaNetworking.PlayFabAuthenticator.instance).Field("platform").GetValue();
+            string platform = PlayFabAuthenticator.instance.platform?.ToString() ?? "";
             IsSteam = platform.ToLower().Contains("steam");
             Enabled = true;
         }
@@ -148,10 +149,12 @@ namespace WalkSimulator
             if (setGamemode) return;
             try
             {
-                FindObjectOfType<GamemodeSelector>().NextPage();
-                foreach (var btn in FindObjectsOfType<ModeSelectButton>())
+                // Utilla's selector is internal, so go through reflection
+                var selectorType = AccessTools.TypeByName("Utilla.Behaviours.UtillaGamemodeSelector");
+                AccessTools.Method(selectorType, "NextPage").Invoke(FindAnyObjectByType(selectorType), null);
+                foreach (var btn in FindObjectsByType<ModeSelectButton>(FindObjectsSortMode.None))
                 {
-                    if (btn.gameMode.Contains("MODDED_CASUAL"))
+                    if (btn.gameMode.ToUpper().Contains("MODDED_CASUAL"))
                     {
                         btn.ButtonActivationWithHand(false);
                     }

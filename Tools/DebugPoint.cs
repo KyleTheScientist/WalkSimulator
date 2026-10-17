@@ -26,7 +26,7 @@ namespace WalkSimulator.Tools
         void FixedUpdate()
         {
             material.color = color;
-            transform.localScale = Vector3.one * size * Player.Instance.scale;
+            transform.localScale = Vector3.one * size * GTPlayer.Instance.scale;
         }
 
         void OnDestroy()

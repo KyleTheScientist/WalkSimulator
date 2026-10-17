@@ -122,7 +122,7 @@ namespace WalkSimulator.Animators
             offsetRight = Vector3.zero;
             lookAtRight = head.forward;
 
-            secondary.targetPosition = secondary.DefaultPosition + Vector3.up * .2f * Player.Instance.scale;
+            secondary.targetPosition = secondary.DefaultPosition + Vector3.up * .2f * GTPlayer.Instance.scale;
             secondary.lookAt = secondary.targetPosition + head.forward;
             secondary.up = body.right * (main.isLeft ? -1 : 1);
         }

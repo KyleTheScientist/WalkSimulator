@@ -12,7 +12,7 @@ using WalkSimulator.Animators;
 using WalkSimulator.Rigging;
 using WalkSimulator.Tools;
 using WalkSimulatorClassic;
-using Thirpy = Cinemachine.Cinemachine3rdPersonFollow;
+using Thirpy = Unity.Cinemachine.CinemachineThirdPersonFollow;
 
 namespace WalkSimulator.Menus
 {
@@ -29,7 +29,7 @@ namespace WalkSimulator.Menus
         bool inRange;
         bool IsInRange()
         {
-            Vector3 playerPos = Player.Instance.bodyCollider.transform.position;
+            Vector3 playerPos = GTPlayer.Instance.bodyCollider.transform.position;
             if (playerPos.Distance(GorillaComputer.instance.transform.position) < 2)
             {
                 currentTerminal = GorillaComputer.instance.transform;
@@ -52,8 +52,7 @@ namespace WalkSimulator.Menus
         {
             Instance = this;
             var cameraObject = new GameObject("WalkSim First Person Camera");
-            var thirpy = FindObjectOfType<Thirpy>();
-            var shoulderCamera = thirpy.gameObject.GetComponentInParent<Camera>();
+            var shoulderCamera = WalkSimulator.Tools.Extensions.ShoulderCamera();
 
             overrideCam = cameraObject.AddComponent<Camera>();
             overrideCam.fieldOfView = 90;
@@ -98,7 +97,7 @@ namespace WalkSimulator.Menus
                         if (key.wasPressedThisFrame)
                         {
                             Logging.Debug("Pressed", key?.name);
-                            GorillaComputer.instance.PressButton(buttonMapping[key]);
+                            GorillaComputer.instance.PressButton(buttonMapping[key].Binding);
                             Sounds.Play(66, .5f);
                         }
                     }
@@ -116,7 +115,7 @@ namespace WalkSimulator.Menus
                 inRange = IsInRange();
 
             if (!inRange && Time.frameCount % 600 == 0)
-                terminals = FindObjectsOfType<GorillaComputerTerminal>();
+                terminals = FindObjectsByType<GorillaComputerTerminal>(FindObjectsSortMode.None);
 
             if (inRange)
             {
@@ -124,9 +123,12 @@ namespace WalkSimulator.Menus
                 if (currentTerminal.GetComponent<GorillaComputerTerminal>() is GorillaComputerTerminal terminal)
                     target = terminal.myScreenText.transform;
                 else
-                    target = Traverse.Create(GorillaComputer.instance.screenText).Field("text").GetValue<Text>().transform;
-                //DebugPoint.Get("Camera Anchor Forward", target.TransformPoint(Vector3.forward * -.3f), Color.blue);
-                overrideCam.transform.position = target.TransformPoint(Vector3.forward * -.3f);
+                    target = GorillaComputer.instance.computerScreenRenderer.transform;
+                // Sit in front of whichever face of the screen points toward the player
+                Vector3 toPlayer = GTPlayer.Instance.headCollider.transform.position - target.position;
+                Vector3 normal = Vector3.Dot(target.forward, toPlayer) >= 0 ? target.forward : -target.forward;
+                //DebugPoint.Get("Camera Anchor Forward", target.position + normal * .3f, Color.blue);
+                overrideCam.transform.position = target.position + normal * .3f;
                 overrideCam.transform.LookAt(target);
             }
             else
@@ -159,7 +161,7 @@ namespace WalkSimulator.Menus
         Dictionary<KeyControl, GorillaKeyboardButton> buttonMapping = new Dictionary<KeyControl, GorillaKeyboardButton>();
         void BuildButtonMap()
         {
-            foreach (var button in FindObjectsOfType<GorillaKeyboardButton>())
+            foreach (var button in FindObjectsByType<GorillaKeyboardButton>(FindObjectsSortMode.None))
             {
                 Key key = keyMapping[button.characterString];
                 buttonMapping.Add(Keyboard.current[key], button);

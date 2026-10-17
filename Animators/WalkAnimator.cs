@@ -30,7 +30,7 @@ namespace WalkSimulator.Animators
                 onJumpCooldown = true;
                 jumpTime = Time.time;
                 rig.active = false;
-                rigidbody.AddForce(Vector3.up * 250 * Player.Instance.scale, ForceMode.Impulse);
+                rigidbody.AddForce(Vector3.up * 250 * GTPlayer.Instance.scale, ForceMode.Impulse);
             }
             if (hasJumped && !rig.onGround || Time.time - jumpTime > 1)
                 onJumpCooldown = false;
@@ -68,14 +68,14 @@ namespace WalkSimulator.Animators
             //targetHeight = .5f;
             // Smoothly transition to target height otherwise we'll snap to the floor when falling
             //height = Mathf.Lerp(body.position.Distance(rig.lastGroundPosition), targetHeight, .2f);
-            Vector3 targetPosition = rig.lastGroundPosition + Vector3.up * height * Player.Instance.scale;
+            Vector3 targetPosition = rig.lastGroundPosition + Vector3.up * height * GTPlayer.Instance.scale;
 
             // Handle movement
             Vector3 direction = body.TransformDirection(InputHandler.inputDirectionNoY);
             direction.y = 0;
             if (Vector3.Dot(rig.lastNormal, Vector3.up) > .3f) // If the slope is too steep, don't correct the direction
                 direction = Vector3.ProjectOnPlane(direction, rig.lastNormal);
-            direction *= Player.Instance.scale;
+            direction *= GTPlayer.Instance.scale;
             float adjSpeed = IsSprinting ? speed * 3f : speed;
             targetPosition += direction * adjSpeed / 10f;
             rig.targetPosition = targetPosition;
@@ -95,7 +95,7 @@ namespace WalkSimulator.Animators
                 //rightHand.lastSnap = rightHand.DefaultPosition;
                 //leftHand.hit = leftHand.DefaultPosition;
                 //rightHand.hit = rightHand.DefaultPosition;
-                Vector3 offset = Vector3.up * .2f * Player.Instance.scale;
+                Vector3 offset = Vector3.up * .2f * GTPlayer.Instance.scale;
                 leftHand.targetPosition = leftHand.DefaultPosition;
                 rightHand.targetPosition = rightHand.DefaultPosition + offset;
                 return;
@@ -125,7 +125,7 @@ namespace WalkSimulator.Animators
 
         void UpdateHitInfo(HandDriver hand)
         {
-            float scale = Player.Instance.scale;
+            float scale = GTPlayer.Instance.scale;
             float raycastLength = .5f * scale;
             var groundPos = rig.smoothedGroundPosition;
             var groundNormal = rig.lastNormal;
@@ -141,7 +141,7 @@ namespace WalkSimulator.Animators
             //DebugPoint.Get(hand.name + "raycast end", Color.yellow).position = origin + -groundNormal * raycastLength;
 
             RaycastHit hit;
-            if (!Physics.Raycast(origin, -groundNormal, out hit, raycastLength, Player.Instance.locomotionEnabledLayers))
+            if (!Physics.Raycast(origin, -groundNormal, out hit, raycastLength, GTPlayer.Instance.locomotionEnabledLayers))
             {
                 if (NotMoving)
                     hand.targetPosition = hand.DefaultPosition;
@@ -159,8 +159,8 @@ namespace WalkSimulator.Animators
             float flatness = Vector3.Dot(rig.lastNormal, Vector3.up);
             float snapDistance = Extensions.Map(flatness, 0, 1, .1f, .6f);
             float adjSnapDistance = Extensions.Map(forwardness, 0, 1, .5f, 1.25f);
-            adjSnapDistance *= snapDistance * Player.Instance.scale;
-            float stepHeight = .2f * Player.Instance.scale;
+            adjSnapDistance *= snapDistance * GTPlayer.Instance.scale;
+            float stepHeight = .2f * GTPlayer.Instance.scale;
 
             float otherStretch = otherHand.hit.Distance(otherHand.lastSnap) / adjSnapDistance;
             if (otherHand.grounded && otherStretch >= 1)

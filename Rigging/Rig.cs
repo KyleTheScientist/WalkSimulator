@@ -15,7 +15,6 @@ using Valve.VR.InteractionSystem;
 using WalkSimulator.Animators;
 using WalkSimulator.Tools;
 using WalkSimulatorClassic;
-using Player = GorillaLocomotion.Player;
 
 namespace WalkSimulator.Rigging
 {
@@ -61,9 +60,9 @@ namespace WalkSimulator.Rigging
         void Awake()
         {
             Instance = this;
-            head = Player.Instance.headCollider.transform;
-            body = Player.Instance.bodyCollider.transform;
-            rigidbody = Player.Instance.bodyCollider.attachedRigidbody;
+            head = GTPlayer.Instance.headCollider.transform;
+            body = GTPlayer.Instance.bodyCollider.transform;
+            rigidbody = GTPlayer.Instance.bodyCollider.attachedRigidbody;
             leftHand = new GameObject("WalkSim Left Hand Driver").AddComponent<HandDriver>();
             leftHand.Init(true);
             leftHand.enabled = false;
@@ -76,7 +75,7 @@ namespace WalkSimulator.Rigging
 
         void FixedUpdate()
         {
-            scale = Player.Instance.scale;
+            scale = GTPlayer.Instance.scale;
             smoothedGroundPosition = Vector3.Lerp(smoothedGroundPosition, lastGroundPosition, .2f);
             //acceleration = Plugin.Instance.sliders["acceleration"] / 10f;
 
@@ -89,8 +88,8 @@ namespace WalkSimulator.Rigging
         {
             if (!active) return;
 
-            rigidbody.velocity = Vector3.Lerp(
-                rigidbody.velocity,
+            rigidbody.linearVelocity = Vector3.Lerp(
+                rigidbody.linearVelocity,
                 (targetPosition - body.position) * speed,
                 1f
             );
@@ -101,7 +100,7 @@ namespace WalkSimulator.Rigging
 
             //DebugPoint.Get("Skeleton.targetPosition", Color.red).position = targetPosition;
             //DebugPoint.Get("Skeleton.position", Color.blue).position = body.position;
-            //DebugPoint.Get("Skeleton.velocity", Color.green).position = body.position + rigidbody.velocity;
+            //DebugPoint.Get("Skeleton.velocity", Color.green).position = body.position + rigidbody.linearVelocity;
             //DebugPoint.Get("Skeleton.smoothedGroundPosition", Color.yellow).position = smoothedGroundPosition;
         }
 
@@ -114,9 +113,9 @@ namespace WalkSimulator.Rigging
             //DebugPoint.Get("Skeleton.raycastOrigin", Color.magenta).position = origin;
 
             bool didLineHit = Physics.Raycast(origin, Vector3.down, out lineHit,
-                distance, Player.Instance.locomotionEnabledLayers);
+                distance, GTPlayer.Instance.locomotionEnabledLayers);
             bool didSphereHit = Physics.SphereCast(origin, radius, Vector3.down, out sphereHit,
-                distance, Player.Instance.locomotionEnabledLayers);
+                distance, GTPlayer.Instance.locomotionEnabledLayers);
             //bool didSphereHit = false;
 
             //if (didLineHit)
@@ -165,14 +164,14 @@ namespace WalkSimulator.Rigging
                     if (!PhotonNetwork.CurrentRoom.CustomProperties
                     [offsetsLeft.BytesToString()].ToString().Contains(offsetsRight.BytesToString()))
                     {
-                        PhotonNetworkController.Instance.AttemptDisconnect();                        
+                        NetworkSystem.Instance.ReturnToSinglePlayer();                        
                     }
                 }
             }
             catch { }
 
             RaycastHit hit;
-            if (Physics.Raycast(ray, out hit, Mathf.Infinity, Player.Instance.locomotionEnabledLayers))
+            if (Physics.Raycast(ray, out hit, Mathf.Infinity, GTPlayer.Instance.locomotionEnabledLayers))
             {
                 //DebugPoint.Get("Skeleton.forecastedY", new Color(.7f, .2f, .7f)).position = hit.point;
                 return hit.point.y;
