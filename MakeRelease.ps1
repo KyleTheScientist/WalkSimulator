@@ -6,5 +6,5 @@ $Version = [regex]::Match((Get-Content PluginInfo.cs -Raw), 'Version = "([^"]+)"
 dotnet build -c Release
 mkdir BepInEx\plugins\$Name
 cp bin\Release\netstandard2.1\$Name.dll BepInEx\plugins\$Name\
-Compress-Archive .\BepInEx\ $Name-v$Version
+Compress-Archive .\BepInEx\ "$Name-v$Version.zip"
 rmdir .\BepInEx\ -Recurse
