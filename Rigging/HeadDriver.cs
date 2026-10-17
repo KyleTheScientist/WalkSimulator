@@ -66,8 +66,9 @@ namespace WalkSimulator.Rigging
         {
             if (!head) return;
 
-            // First person: look through the game's own camera from the head
-            if (firstPerson)
+            // First person: look through the game's own camera from the head. While the game's
+            // overlay is up (loading screen, report menu), leave the camera to the game.
+            if (firstPerson && !GTPlayer.Instance.inOverlay)
             {
                 ShoulderCameraControl.Take(this, FirstPersonFieldOfView);
                 ShoulderCameraControl.Place(GTPlayer.Instance.headCollider.transform.TransformPoint(offset), Quaternion.LookRotation(head.forward));

@@ -35,9 +35,11 @@ namespace WalkSimulator.Tools
             if (owner == null)
             {
                 brain = cam.GetComponentInChildren<Unity.Cinemachine.CinemachineBrain>(true);
-                if (brain) brain.enabled = false;
                 originalFieldOfView = cam.fieldOfView;
             }
+            // Keep the brain off for as long as it's borrowed; the game turns it back on in places
+            // (e.g. when its loading overlay closes)
+            if (brain && brain.enabled) brain.enabled = false;
             owner = who;
             cam.fieldOfView = fieldOfView;
             return true;
