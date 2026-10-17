@@ -31,6 +31,8 @@ namespace WalkSimulator
                 HeadDriver.Instance.LockCursor = !HeadDriver.Instance.LockCursor;
             if (Keyboard.current.cKey.wasPressedThisFrame)
                 HeadDriver.Instance.ToggleCam();
+            if (Keyboard.current.f6Key.wasPressedThisFrame)
+                Plugin.Instance.ToggleWalkStyle();
 
             var radialMenu = Plugin.Instance.radialMenu;
             radialMenu.enabled = Keyboard.current.tabKey.isPressed;

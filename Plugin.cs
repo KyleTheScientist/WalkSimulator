@@ -26,11 +26,27 @@ namespace WalkSimulator
         public static bool IsSteam { get; protected set; }
         private static bool _enabled = true;
         public AnimatorBase 
-            walkAnimator, 
+            proceduralWalkAnimator,
+            classicWalkAnimator,
             flyAnimator, 
             emoteAnimator, 
             handAnimator,
             grabAnimator;
+        public static ConfigEntry<bool> ClassicWalk;
+
+        // Whichever walk style is selected
+        public AnimatorBase walkAnimator => ClassicWalk.Value ? classicWalkAnimator : proceduralWalkAnimator;
+
+        public bool IsWalking => Rig.Instance && Rig.Instance.Animator &&
+            (Rig.Instance.Animator == proceduralWalkAnimator || Rig.Instance.Animator == classicWalkAnimator);
+
+        public void ToggleWalkStyle()
+        {
+            ClassicWalk.Value = !ClassicWalk.Value;
+            Logging.Info("Walk style:", ClassicWalk.Value ? "classic" : "procedural");
+            if (IsWalking)
+                Rig.Instance.Animator = walkAnimator;
+        }
         public ComputerGUI computerGUI;
         public AssetBundle bundle;
         public RadialMenu radialMenu;
@@ -48,7 +64,8 @@ namespace WalkSimulator
                 {
                     this.gameObject.GetOrAddComponent<InputHandler>();
                     this.gameObject.GetOrAddComponent<Rig>();
-                    walkAnimator = this.gameObject.GetOrAddComponent<WalkAnimator>();
+                    proceduralWalkAnimator = this.gameObject.GetOrAddComponent<WalkAnimator>();
+                    classicWalkAnimator = this.gameObject.GetOrAddComponent<ClassicWalkAnimator>();
                     flyAnimator = this.gameObject.GetOrAddComponent<FlyAnimator>();
                     emoteAnimator = this.gameObject.GetOrAddComponent<EmoteAnimator>();
                     handAnimator = this.gameObject.GetOrAddComponent<PoseAnimator>();
@@ -62,7 +79,7 @@ namespace WalkSimulator
                     computerGUI = this.gameObject.GetOrAddComponent<ComputerGUI>();
                     // This runs again on every modded room join/leave, so leave the animator
                     // that's in use running (its Update handles things like jumping)
-                    foreach (var animator in new[] { walkAnimator, flyAnimator, emoteAnimator, handAnimator, grabAnimator })
+                    foreach (var animator in new[] { proceduralWalkAnimator, classicWalkAnimator, flyAnimator, emoteAnimator, handAnimator, grabAnimator })
                         animator.enabled = animator == Rig.Instance.Animator;
                     StartCoroutine(SelectDefaultAnimator());
                 }
@@ -70,7 +87,8 @@ namespace WalkSimulator
                 {
                     InputHandler.Instance?.Obliterate();
                     Rig.Instance?.Obliterate();
-                    walkAnimator?.Obliterate();
+                    proceduralWalkAnimator?.Obliterate();
+                    classicWalkAnimator?.Obliterate();
                     flyAnimator?.Obliterate();
                     emoteAnimator?.Obliterate();
                     handAnimator?.Obliterate();
@@ -94,6 +112,8 @@ namespace WalkSimulator
         {
             Instance = this;
             Logging.Init();
+            ClassicWalk = Config.Bind("Animation", "Classic Walk", false,
+                "Use the original walk animation instead of the procedural one. Toggle in game with F6.");
 
             // open the file at BepInEx/config/BepInEx.cfg and replace the value of the setting
             // HideManagerGameObject with "true" using regex. 

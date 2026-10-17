@@ -1,4 +1,4 @@
-﻿using GorillaLocomotion;
+using GorillaLocomotion;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using WalkSimulator.Rigging;
@@ -6,186 +6,74 @@ using WalkSimulator.Tools;
 
 namespace WalkSimulator.Animators
 {
+    /// <summary>
+    /// Procedural knuckle-walk.
+    /// - The gait cycle advances with the distance the body actually travels, so cadence follows
+    ///   speed and the hands stop stepping if you're pushing against a wall.
+    /// - A planted hand stays exactly where it landed while the body passes over it (no sliding).
+    /// - A swinging hand aims ahead of the body so that it ends up as far behind as it started
+    ///   ahead; the landing spot is re-raycast every tick so steps follow turns and slopes.
+    /// - Standing still, hands settle at rest spots and take corrective steps when you turn.
+    /// - The body bobs once per step (lowest at each plant), sways toward the weight-bearing arm,
+    ///   and dips when landing.
+    /// All distances are in meters at scale 1 and get multiplied by the player's scale.
+    /// </summary>
     public class WalkAnimator : AnimatorBase
     {
-        float speed = 4f;
-        float height = .4f;
-        float targetHeight;
+        // ---- Tuning ----
+        // Body movement (same speeds as the classic walk)
+        const float WalkSpeed = 4f, SprintMultiplier = 3f;
+        const float RideHeight = .46f, CrouchDrop = .3f;
+        const float WalkBob = .16f, SprintBob = .22f, IdleBob = .03f;
+        const float Sway = .04f;
+        const float LandingDip = .12f;
 
-        public override void Animate()
+        // Gait: stride is how far the body travels per full cycle (each hand steps once);
+        // duty is the fraction of the cycle each hand spends planted
+        const float WalkStride = 1f, SprintStride = 2f;
+        const float WalkDuty = .65f, SprintDuty = .45f;
+        const float WalkStepHeight = .12f, SprintStepHeight = .22f;
+        const float SwingCurlDegrees = 25f;     // wrist flick during the swing
+        const float MinGaitSpeed = .1f;         // m/s; slower than this counts as standing
+        const float IdleStepThreshold = .18f;   // standing hand this far from its rest spot steps
+        const float IdleStepDuration = .18f;    // seconds per corrective step
+
+        class Limb
         {
-            MoveBody();
-            AnimateHands();
+            public HandDriver driver;
+            public float phaseOffset;           // 0 for left, .5 for right
+            public bool planted;
+            public float swingT;                // 0..1 progress through the current swing
+            public Vector3 liftPoint;           // where the current swing started
+            public Vector3 plantPoint, plantNormal = Vector3.up;
+            public Vector3 lastTravelDirection;  // aims the swing; zero while standing
         }
 
-        bool hasJumped, onJumpCooldown;
-        float jumpTime;
-        void Update()
-        {
-            if (!Plugin.Instance.Enabled) return;
+        Limb left, right;
+        float phase;                            // 0..1 position in the gait cycle
+        float moveWeight;                       // 0 standing .. 1 walking, smoothed
+        float height = RideHeight, dip;
+        bool wasMoving, wasOnGround = true, needsPlant = true;
 
-            if (!hasJumped && rig.onGround && Keyboard.current.spaceKey.wasPressedThisFrame)
-            {
-                hasJumped = true;
-                onJumpCooldown = true;
-                jumpTime = Time.time;
-                rig.active = false;
-                rigidbody.AddForce(Vector3.up * 250 * GTPlayer.Instance.scale, ForceMode.Impulse);
-            }
-            if (hasJumped && !rig.onGround || Time.time - jumpTime > 1)
-                onJumpCooldown = false;
-            if (rig.onGround && !onJumpCooldown)
-                hasJumped = false;
+        float Scale => GTPlayer.Instance.scale;
+        bool IsSprinting => Keyboard.current.leftShiftKey.isPressed;
+        bool NotMoving => InputHandler.inputDirectionNoY == Vector3.zero;
+        float Stride => (IsSprinting ? SprintStride : WalkStride) * Scale;
+        float Duty => IsSprinting ? SprintDuty : WalkDuty;
+
+        protected override void Start()
+        {
+            base.Start();
+            left = new Limb() { driver = leftHand, phaseOffset = 0 };
+            right = new Limb() { driver = rightHand, phaseOffset = .5f };
         }
 
-        public void MoveBody()
+        public override void Setup()
         {
-            rig.active = rig.onGround && !hasJumped;
-            rig.useGravity = !rig.onGround;
-            if (!rig.onGround) return;
-
-            // Idle breathing, or bobbing up and down while walking
-            float baseHeight, bob, t;
-            if (NotMoving)
-            {
-                baseHeight = .5f;
-                bob = .04f;
-                t = Mathf.Sin(Time.time * Mathf.PI * 2) * .5f + .5f;
-            }
-            else
-            {
-                baseHeight = .46f;
-                bob = IsSprinting ? .22f : .16f;
-                // Lowest when a hand plants, highest mid-swing (one bob per step)
-                t = Mathf.Sin(walkCycleTime * Mathf.PI);
-            }
-            if (Keyboard.current.ctrlKey.isPressed)
-                baseHeight -= .3f;
-            targetHeight = baseHeight + bob * t;
-            // Ease toward the target so the body doesn't snap between heights
-            height = Mathf.Lerp(height, targetHeight, Extensions.Smoothing(.3f));
-            Vector3 targetPosition = rig.lastGroundPosition + Vector3.up * height * GTPlayer.Instance.scale;
-
-            // Handle movement
-            Vector3 direction = body.TransformDirection(InputHandler.inputDirectionNoY);
-            direction.y = 0;
-            if (Vector3.Dot(rig.lastNormal, Vector3.up) > .3f) // If the slope is too steep, don't correct the direction
-                direction = Vector3.ProjectOnPlane(direction, rig.lastNormal);
-            direction *= GTPlayer.Instance.scale;
-            float adjSpeed = IsSprinting ? speed * 3f : speed;
-            targetPosition += direction * adjSpeed / 10f;
-            rig.targetPosition = targetPosition;
-        }
-
-        void AnimateHands()
-        {
-            // Hands have to cover more ground per step when sprinting, so let them catch up faster
-            leftHand.followRate = rightHand.followRate = IsSprinting ? .35f : .1f;
-            leftHand.lookAt = leftHand.targetPosition + body.forward;
-            rightHand.lookAt = rightHand.targetPosition + body.forward;
-            leftHand.up = body.right;
-            rightHand.up = -body.right;
-            if (!rig.onGround)
-            {
-                leftHand.grounded = false;
-                rightHand.grounded = false;
-                //leftHand.lastSnap = leftHand.DefaultPosition;
-                //rightHand.lastSnap = rightHand.DefaultPosition;
-                //leftHand.hit = leftHand.DefaultPosition;
-                //rightHand.hit = rightHand.DefaultPosition;
-                Vector3 offset = Vector3.up * .2f * GTPlayer.Instance.scale;
-                leftHand.targetPosition = leftHand.DefaultPosition;
-                rightHand.targetPosition = rightHand.DefaultPosition + offset;
-                return;
-            }
-
-            UpdateHitInfo(leftHand);
-            UpdateHitInfo(rightHand);
-
-            if (NotMoving)
-            {
-                leftHand.targetPosition = leftHand.hit;
-                rightHand.targetPosition = rightHand.hit;
-                return;
-            }
-
-            if (!leftHand.grounded && !rightHand.grounded)
-            {
-                leftHand.grounded = true;
-                leftHand.lastSnap = leftHand.hit;
-                leftHand.targetPosition = leftHand.hit;
-                rightHand.lastSnap = rightHand.hit;
-                rightHand.targetPosition = rightHand.hit;
-            }
-            AnimateHand(leftHand, rightHand);
-            AnimateHand(rightHand, leftHand);
-        }
-
-        void UpdateHitInfo(HandDriver hand)
-        {
-            float scale = GTPlayer.Instance.scale;
-            float raycastLength = .5f * scale;
-            var groundPos = rig.smoothedGroundPosition;
-            var groundNormal = rig.lastNormal;
-
-            float forwardness = Mathf.Abs(Vector3.Dot(InputHandler.inputDirectionNoY, Vector3.forward));
-            float adjOriginDistance = Extensions.Map(forwardness, 0, 1, .4f, .5f);
-            var directionOffset = body.TransformDirection(InputHandler.inputDirectionNoY * adjOriginDistance);
-            directionOffset.y = 0;
-            directionOffset *= scale;
-            Vector3 origin = Vector3.ProjectOnPlane(hand.DefaultPosition - groundPos + directionOffset, groundNormal);
-            origin += groundPos + (groundNormal * .3f * scale);
-            //DebugPoint.Get(hand.name + "raycast origin", Color.cyan).position = origin;
-            //DebugPoint.Get(hand.name + "raycast end", Color.yellow).position = origin + -groundNormal * raycastLength;
-
-            RaycastHit hit;
-            if (!Physics.Raycast(origin, -groundNormal, out hit, raycastLength, GTPlayer.Instance.locomotionEnabledLayers))
-            {
-                if (NotMoving)
-                    hand.targetPosition = hand.DefaultPosition;
-                return;
-            }
-            hand.hit = hit.point;
-            hand.normal = hit.normal;
-            hand.lookAt = hand.transform.position + body.forward;
-        }
-
-        float walkCycleTime = 0;
-        void AnimateHand(HandDriver hand, HandDriver otherHand)
-        {
-            float forwardness = Mathf.Abs(Vector3.Dot(InputHandler.inputDirectionNoY, Vector3.forward));
-            float flatness = Vector3.Dot(rig.lastNormal, Vector3.up);
-            float snapDistance = Extensions.Map(flatness, 0, 1, .1f, .6f);
-            float adjSnapDistance = Extensions.Map(forwardness, 0, 1, .5f, 1.25f);
-            adjSnapDistance *= snapDistance * GTPlayer.Instance.scale;
-            float stepHeight = .2f * GTPlayer.Instance.scale;
-
-            float otherStretch = otherHand.hit.Distance(otherHand.lastSnap) / adjSnapDistance;
-            if (otherHand.grounded && otherStretch >= 1)
-            {
-                hand.targetPosition = hand.hit;
-                hand.lastSnap = hand.hit;
-                hand.grounded = true;
-                otherHand.grounded = false;
-            }
-            else if (otherHand.grounded)
-            {
-                walkCycleTime = Mathf.Clamp01(otherStretch);
-                // Lerp, not Slerp: these are points, and Slerp would arc them around the world origin
-                hand.targetPosition = Vector3.Lerp(hand.lastSnap, hand.hit, walkCycleTime);
-                // Lift peaks mid-swing and is back on the ground when the hand plants
-                hand.targetPosition += hand.normal * stepHeight * Mathf.Sin(walkCycleTime * Mathf.PI);
-                //hand.targetPosition = hand.lastSnap;
-                hand.grounded = false;
-            }
-
-            if (hand.targetPosition.Distance(hand.DefaultPosition) > 1f)
-            {
-                hand.targetPosition = hand.DefaultPosition;
-            }
-            //hand.followRate = hand.grounded ? .2f : .1f;
-            //DebugPoint.Get($"{hand.name} hit", hand.isLeft ? Color.blue : Color.green).position = hand.hit;
-            //DebugPoint.Get($"{hand.name} snap", hand.isLeft ? Color.cyan : Color.magenta).position = hand.lastSnap;
+            HeadDriver.Instance.LockCursor = true;
+            HeadDriver.Instance.turn = true;
+            // Plant both hands fresh on the next tick
+            needsPlant = true;
         }
 
         public override void Cleanup()
@@ -194,20 +82,280 @@ namespace WalkSimulator.Animators
             leftHand.followRate = rightHand.followRate = .1f;
         }
 
-        public override void Setup()
+        public override void Animate()
         {
-            HeadDriver.Instance.LockCursor = true;
-            HeadDriver.Instance.turn = true;
+            if (rig == null || left == null) return; // Start hasn't run yet
+            MoveBody();
+            AnimateHands();
         }
 
-        bool IsSprinting
+        #region Jumping
+        bool hasJumped, onJumpCooldown;
+        float jumpTime;
+        void Update()
         {
-            get { return Keyboard.current.leftShiftKey.isPressed; }
+            if (!Plugin.Instance.Enabled || rig == null) return;
+
+            if (!hasJumped && rig.onGround && Keyboard.current.spaceKey.wasPressedThisFrame)
+            {
+                hasJumped = true;
+                onJumpCooldown = true;
+                jumpTime = Time.time;
+                rig.active = false;
+                rigidbody.AddForce(Vector3.up * 250 * Scale, ForceMode.Impulse);
+            }
+            if (hasJumped && !rig.onGround || Time.time - jumpTime > 1)
+                onJumpCooldown = false;
+            if (rig.onGround && !onJumpCooldown)
+                hasJumped = false;
+        }
+        #endregion
+
+        #region Body
+        void MoveBody()
+        {
+            rig.active = rig.onGround && !hasJumped;
+            rig.useGravity = !rig.onGround;
+            if (!rig.onGround) return;
+
+            moveWeight = Mathf.Lerp(moveWeight, NotMoving ? 0 : 1, Extensions.Smoothing(.15f));
+
+            // Gait bob: two bumps per cycle (one per step). Each hand plants at phase = its offset,
+            // so cos(4*pi*phase) puts the low points at the plants and the high points mid-stance.
+            float gaitBob = (IsSprinting ? SprintBob : WalkBob) * (.5f - .5f * Mathf.Cos(phase * Mathf.PI * 4));
+            float idleBob = IdleBob * (.5f + .5f * Mathf.Sin(Time.time * Mathf.PI * 2));
+            float targetHeight = RideHeight + Mathf.Lerp(idleBob, gaitBob, moveWeight);
+            if (Keyboard.current.ctrlKey.isPressed)
+                targetHeight -= CrouchDrop;
+
+            // Dip on landing, then recover
+            if (!wasOnGround)
+                dip = LandingDip;
+            dip = Mathf.Lerp(dip, 0, Extensions.Smoothing(.08f));
+            targetHeight -= dip;
+
+            height = Mathf.Lerp(height, targetHeight, Extensions.Smoothing(.3f));
+            Vector3 targetPosition = rig.lastGroundPosition + Vector3.up * height * Scale;
+
+            // Sway toward whichever hand is bearing weight (left mid-stance is at phase = duty/2)
+            float swayAmount = Mathf.Cos((phase - Duty / 2) * Mathf.PI * 2) * Sway * Scale * moveWeight;
+            targetPosition -= body.right * swayAmount;
+
+            // Movement
+            Vector3 direction = body.TransformDirection(InputHandler.inputDirectionNoY);
+            direction.y = 0;
+            if (Vector3.Dot(rig.lastNormal, Vector3.up) > .3f) // If the slope is too steep, don't correct the direction
+                direction = Vector3.ProjectOnPlane(direction, rig.lastNormal);
+            float speed = IsSprinting ? WalkSpeed * SprintMultiplier : WalkSpeed;
+            targetPosition += direction * Scale * speed / 10f;
+            rig.targetPosition = targetPosition;
+        }
+        #endregion
+
+        #region Hands
+        void AnimateHands()
+        {
+            if (!rig.onGround)
+            {
+                AirPose();
+                wasOnGround = false;
+                wasMoving = false;
+                return;
+            }
+            if (!wasOnGround || needsPlant)
+            {
+                // Just landed (or just selected): put both hands down under the shoulders
+                PlantAt(left, RestSpot(left));
+                PlantAt(right, RestSpot(right));
+                wasOnGround = true;
+                needsPlant = false;
+                wasMoving = false;
+            }
+
+            float dt = Time.deltaTime;
+            Vector3 velocity = Vector3.ProjectOnPlane(rigidbody.linearVelocity, Vector3.up);
+            float speed = velocity.magnitude;
+            bool moving = speed > MinGaitSpeed * Scale && !NotMoving;
+
+            if (moving)
+            {
+                if (!wasMoving)
+                    SyncPhaseToHands();
+                Vector3 travelDirection = velocity / speed;
+                phase = Mathf.Repeat(phase + speed * dt / Stride, 1);
+
+                UpdateMovingLimb(left, travelDirection);
+                UpdateMovingLimb(right, travelDirection);
+
+                // If the body has run away from a planted hand (sharp turn, knocked around),
+                // lift it now and re-sync the cycle around it. Normally a planted hand gets at most
+                // half a stance (stride * duty / 2) from its shoulder before lifting.
+                float reachLimit = Mathf.Max(.3f * Scale, Stride * Duty * .8f);
+                foreach (var limb in new[] { left, right })
+                {
+                    var other = limb == left ? right : left;
+                    if (limb.planted && other.planted && FlatDistance(limb.plantPoint, RestSpot(limb).point) > reachLimit)
+                    {
+                        phase = Mathf.Repeat(Duty - limb.phaseOffset + .001f, 1);
+                        BeginSwing(limb);
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                UpdateStandingLimb(left, right, dt);
+                UpdateStandingLimb(right, left, dt);
+            }
+            wasMoving = moving;
+
+            Pose(left);
+            Pose(right);
         }
 
-        bool NotMoving
+        // Phase-driven stepping while moving
+        void UpdateMovingLimb(Limb limb, Vector3 travelDirection)
         {
-            get { return InputHandler.inputDirectionNoY == Vector3.zero; }
+            float p = Mathf.Repeat(phase + limb.phaseOffset, 1);
+            if (p >= Duty)
+            {
+                if (limb.planted)
+                    BeginSwing(limb);
+                limb.swingT = (p - Duty) / (1 - Duty);
+                limb.lastTravelDirection = travelDirection;
+            }
+            else if (!limb.planted)
+                PlantAt(limb, Target(limb, travelDirection, 1));
         }
+
+        // Time-driven stepping while standing: finish any swing, then take corrective steps
+        void UpdateStandingLimb(Limb limb, Limb other, float dt)
+        {
+            limb.lastTravelDirection = Vector3.zero;
+            if (!limb.planted)
+            {
+                limb.swingT += dt / IdleStepDuration;
+                if (limb.swingT >= 1)
+                    PlantAt(limb, RestSpot(limb));
+                return;
+            }
+            // Only one hand steps at a time, and the one that's furthest off goes first
+            if (!other.planted) return;
+            float error = limb.plantPoint.Distance(RestSpot(limb).point);
+            float otherError = other.plantPoint.Distance(RestSpot(other).point);
+            if (error > IdleStepThreshold * Scale && error >= otherError)
+                BeginSwing(limb);
+        }
+
+        // When starting to move, line the cycle up with whichever hand is already mid-swing,
+        // otherwise start the left hand's swing right away
+        void SyncPhaseToHands()
+        {
+            foreach (var limb in new[] { left, right })
+            {
+                if (!limb.planted)
+                {
+                    phase = Mathf.Repeat(Duty + limb.swingT * (1 - Duty) - limb.phaseOffset, 1);
+                    return;
+                }
+            }
+            phase = Mathf.Repeat(Duty - left.phaseOffset + .001f, 1);
+        }
+
+        void BeginSwing(Limb limb)
+        {
+            limb.planted = false;
+            limb.swingT = 0;
+            limb.liftPoint = limb.plantPoint;
+        }
+
+        void PlantAt(Limb limb, GroundHit spot)
+        {
+            limb.planted = true;
+            limb.swingT = 0;
+            limb.plantPoint = spot.point;
+            limb.plantNormal = spot.normal;
+        }
+
+        static float FlatDistance(Vector3 a, Vector3 b) => Vector3.ProjectOnPlane(a - b, Vector3.up).magnitude;
+
+        // Where a swinging hand should land. It leads the body by enough that it plants ahead of
+        // the shoulder and gets passed by half a stance's worth of travel before lifting again.
+        GroundHit Target(Limb limb, Vector3 travelDirection, float swingT)
+        {
+            float lead = Stride * ((1 - swingT) * (1 - Duty) + Duty / 2);
+            return GroundBelow(limb.driver.DefaultPosition + travelDirection * lead, limb);
+        }
+
+        GroundHit RestSpot(Limb limb) => GroundBelow(limb.driver.DefaultPosition, limb);
+
+        struct GroundHit { public Vector3 point, normal; }
+
+        GroundHit GroundBelow(Vector3 point, Limb limb)
+        {
+            float s = Scale;
+            if (Physics.Raycast(point + Vector3.up * .4f * s, Vector3.down, out RaycastHit hit,
+                .9f * s, GTPlayer.Instance.locomotionEnabledLayers))
+                return new GroundHit() { point = hit.point, normal = hit.normal };
+            // Nothing below (ledge): let the hand hang where it would be
+            return new GroundHit() { point = point, normal = limb.planted ? limb.plantNormal : Vector3.up };
+        }
+
+        // Positions and orients the hand
+        void Pose(Limb limb)
+        {
+            var hand = limb.driver;
+            hand.hideControllerTransform = true;
+            Vector3 position, normal;
+            float curl = 0;
+            if (limb.planted)
+            {
+                position = limb.plantPoint;
+                normal = limb.plantNormal;
+                // Pinned where it landed; a touch of smoothing so plants and landings don't pop
+                hand.followRate = .7f;
+            }
+            else
+            {
+                // Standing steps (no travel direction) go to the rest spot
+                var target = limb.lastTravelDirection == Vector3.zero ?
+                    RestSpot(limb) :
+                    Target(limb, limb.lastTravelDirection, limb.swingT);
+                float t = Mathf.SmoothStep(0, 1, limb.swingT);
+                float arc = Mathf.Sin(limb.swingT * Mathf.PI);
+                float stepHeight = (IsSprinting ? SprintStepHeight : WalkStepHeight) * Scale;
+                normal = Vector3.Slerp(limb.plantNormal, target.normal, t);
+                position = Vector3.Lerp(limb.liftPoint, target.point, t) + normal * stepHeight * arc;
+                curl = SwingCurlDegrees * arc;
+                hand.followRate = .6f;
+            }
+            hand.targetPosition = position;
+
+            // Knuckles forward along the ground; tilt with slopes; flick the wrist mid-swing
+            Vector3 forward = Vector3.ProjectOnPlane(body.forward, normal).normalized;
+            if (forward == Vector3.zero) forward = body.forward;
+            Vector3 right = Vector3.Cross(normal, forward);
+            forward = Quaternion.AngleAxis(curl, right) * forward;
+            hand.lookAt = position + forward;
+            hand.up = limb == left ? right : -right;
+        }
+
+        // In the air: hands up and a little forward, like the classic walk
+        void AirPose()
+        {
+            float s = Scale;
+            foreach (var limb in new[] { left, right })
+            {
+                var hand = limb.driver;
+                limb.planted = false;
+                limb.swingT = 0;
+                limb.liftPoint = hand.transform.position;
+                hand.followRate = .15f;
+                hand.targetPosition = hand.DefaultPosition + (Vector3.up * .15f + body.forward * .1f) * s;
+                hand.lookAt = hand.targetPosition + body.forward;
+                hand.up = limb == left ? body.right : -body.right;
+            }
+        }
+        #endregion
     }
 }

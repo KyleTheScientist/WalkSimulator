@@ -15,7 +15,7 @@ namespace WalkSimulator.Menus
         {
             public Image image;
             public Vector2 direction;
-            public AnimatorBase animator;
+            public Func<AnimatorBase> animator;
         }
 
         public List<Icon> icons;
@@ -30,10 +30,10 @@ namespace WalkSimulator.Menus
 
             icons = new List<Icon>()
             {
-                new Icon(){image = walk, direction = Vector2.up, animator = Plugin.Instance.walkAnimator},
-                new Icon(){image = interact, direction = Vector2.left, animator = Plugin.Instance.grabAnimator},
-                new Icon(){image = pose, direction = Vector2.down, animator = Plugin.Instance.handAnimator},
-                new Icon(){image = fly, direction = Vector2.right, animator = Plugin.Instance.flyAnimator},
+                new Icon(){image = walk, direction = Vector2.up, animator = () => Plugin.Instance.walkAnimator},
+                new Icon(){image = interact, direction = Vector2.left, animator = () => Plugin.Instance.grabAnimator},
+                new Icon(){image = pose, direction = Vector2.down, animator = () => Plugin.Instance.handAnimator},
+                new Icon(){image = fly, direction = Vector2.right, animator = () => Plugin.Instance.flyAnimator},
             };
         }
 
@@ -54,7 +54,7 @@ namespace WalkSimulator.Menus
                     closestDistance = d;
                 }
             }
-            selectedAnimator = closest.animator;
+            selectedAnimator = closest.animator?.Invoke();
             foreach (var icon in icons)
             {
                 icon.image.color = icon.Equals(closest) ? Color.white : Color.gray;
