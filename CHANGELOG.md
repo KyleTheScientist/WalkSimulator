@@ -1,0 +1,46 @@
+# Changelog
+
+## 3.0.0
+
+WalkSimulator is back for the current version of Gorilla Tag, with a rebuilt walk and a lot of new ways to get around.
+
+### Requirements
+
+- **BepInEx 5.4.23.x** or newer. 5.4.22 crashes on launch with the current game.
+- **A current Utilla build.** Utilla 1.6.27 and older no longer load.
+- **No VR headset needed.** SteamVR no longer has to be running.
+
+### New
+
+- **New walk animation.** Hands plant on the ground and stay put while you move over them, the step rhythm follows your speed, and the body bobs and sways with each step. Turning in place makes your hands step around. Press **F6** to switch back to the classic walk.
+- **Wall climbing.** Hold a direction into a wall or steep slope and press **Space** to bounce off it. Keep jumping to climb, and your hands slap the wall on each bounce.
+- **Air control.** Steer while in the air, without losing the momentum you already have.
+- **Sliding.** Icy surfaces work like the real game: you keep your speed, slopes speed you up, and steering turns your slide. Hands stop walking while you slide, and the game's slide sound plays.
+- **Swimming.** Walk or fall into deep water to swim toward where you're looking. **Space** / **Ctrl** go up and down, and **Space** at the surface leaps out. You float at the surface when idle, and flowing water carries you.
+- **Ziplines.** Hold a mouse button near a cable to ride it, and release or press **Space** to jump off.
+- **Ropes.** Hold a mouse button near a rope to swing on it. **WASD** pumps the swing, and you launch off with its momentum when you let go.
+- **Gliders.** Hold a mouse button near a glider to pick it up. **A/D** roll, **W/S** dive and climb, and the glider keeps itself level otherwise. You can walk and jump while carrying it.
+- **Broomsticks.** Hold a mouse button when a flying broomstick passes to hang on and get carried along.
+- **Sliders.** In Interact mode, hold a mouse button on a slider and move the mouse up or down to drag it.
+- **On-screen controls.** The controls for your current mode are listed in the corner. Press **H** to show or hide them.
+- **Flying animations.** Hands tread water while hovering and spread into airplane arms that bank as you turn.
+- **Settings file** with options for the classic walk and the controls overlay.
+
+### Improved
+
+- **Start walking right away.** Walk mode is selected as soon as the game loads, so you no longer need to pick it from the Tab menu first.
+- **Sprint while flying** by holding **Shift**.
+- **Stop emotes** by moving or pressing the same number again.
+- **Interact mode** presses buttons instantly, including elevator buttons, and only presses the one you're aiming at. The hand tap is just for show.
+- **Pose mode** scroll is much faster.
+- **Computers and terminals** only activate when you're standing in front of one, and the camera lines up with the screen.
+- **The Tab mode menu** is smaller.
+- **Closing the Tab menu** without choosing keeps your current mode.
+- **Arms keep up with you** when falling fast.
+
+### Fixed
+
+- Mouse-look and the camera work again.
+- Entering zones like the city no longer drops you into a public lobby when a modded mode is selected.
+- Jumping no longer stops working after joining or leaving a room.
+- Leaving noclip in fly mode no longer leaves your body passing through things.
