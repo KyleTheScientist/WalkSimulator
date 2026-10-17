@@ -5,6 +5,7 @@ using UnityEngine.InputSystem;
 using UnityEngine;
 using Thirpy = Unity.Cinemachine.Cinemachine3rdPersonFollow;
 using GorillaLocomotion;
+using WalkSimulator.Tools;
 
 namespace WalkSimulator.Rigging
 {
@@ -12,9 +13,7 @@ namespace WalkSimulator.Rigging
     {
         public static HeadDriver Instance;
         public Transform thirpyTarget, head;
-        public GameObject cameraObject;
         Vector3 offset = new Vector3(0, 0f, 0);
-        Camera overrideCam;
 
         public bool turn = true;
         bool _lockCursor;
@@ -48,19 +47,6 @@ namespace WalkSimulator.Rigging
         void Start()
         {
             thirpyTarget = FindFollowTarget();
-            var shoulderCamera = WalkSimulator.Tools.Extensions.ShoulderCamera();
-            //cosmeticsTransform = GorillaTagger.Instance.mainCamera.transform.Find("Cosmetics");
-
-            cameraObject = Plugin.Instance.bundle.LoadAsset<GameObject>("Override Camera");
-            cameraObject = Instantiate(cameraObject);
-            overrideCam = cameraObject.GetComponent<Camera>();
-            overrideCam.nearClipPlane = shoulderCamera.nearClipPlane;
-            overrideCam.farClipPlane = shoulderCamera.farClipPlane;
-            overrideCam.cullingMask = shoulderCamera.cullingMask;
-            overrideCam.depth = shoulderCamera.depth + 1;
-            overrideCam.targetDisplay = shoulderCamera.targetDisplay;  
-            overrideCam.fieldOfView = 90;
-            overrideCam.enabled = false;
         }
 
         // The transform the shoulder camera follows; tilting it is what makes the monitor view look up/down
@@ -78,9 +64,16 @@ namespace WalkSimulator.Rigging
 
         void LateUpdate()
         {
-            if (!cameraObject || !head) return;
-            cameraObject.transform.position = GTPlayer.Instance.headCollider.transform.TransformPoint(offset);
-            cameraObject.transform.forward = head.forward;
+            if (!head) return;
+
+            // First person: look through the game's own camera from the head
+            if (firstPerson)
+            {
+                ShoulderCameraControl.Take(this, FirstPersonFieldOfView);
+                ShoulderCameraControl.Place(GTPlayer.Instance.headCollider.transform.TransformPoint(offset), Quaternion.LookRotation(head.forward));
+            }
+            else
+                ShoulderCameraControl.Release(this);
 
             // Turn the camera with the mouse
             if (turn)
@@ -113,21 +106,18 @@ namespace WalkSimulator.Rigging
             //GorillaTagger.Instance.offlineVRRig.head.rigTarget = replacement.transform;
         }
 
+        bool firstPerson;
+        const float FirstPersonFieldOfView = 90;
+
         internal void ToggleCam()
         {
-            overrideCam.enabled = !overrideCam.enabled;
+            firstPerson = !firstPerson;
         }
 
         public bool FirstPerson
         {
-            get
-            {
-                return overrideCam.enabled;
-            }
-            set
-            {
-                overrideCam.enabled = value;
-            }
+            get { return firstPerson; }
+            set { firstPerson = value; }
         }
 
         void OnEnable()
@@ -140,6 +130,7 @@ namespace WalkSimulator.Rigging
 
         void OnDisable()
         {
+            ShoulderCameraControl.Release(this);
             if (!head) return;
             LockCursor = false;
             GorillaTagger.Instance.offlineVRRig.head.rigTarget = head;

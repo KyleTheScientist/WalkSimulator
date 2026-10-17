@@ -238,7 +238,11 @@ namespace WalkSimulator.Animators
             }
 
             // The rest is for show: a quick pointing tap from the hand's resting spot to the
-            // button and back (the touch also presses buttons that have no click method)
+            // button and back. When the button was pressed directly, switch the hand's touch
+            // colliders off for the tap so it doesn't press other buttons on the way (keyboards);
+            // otherwise the touch is what presses it.
+            if (pressable.component)
+                SetHandTouch(hand.isLeft, false);
             Vector3 toButton = buttonPoint - hand.DefaultPosition;
             hand.grip = true;   // grip without trigger makes a pointing finger
             hand.followRate = .5f;
@@ -252,7 +256,30 @@ namespace WalkSimulator.Animators
 
             hand.grip = false;
             hand.followRate = .1f;
+            SetHandTouch(hand.isLeft, true);
             state = State.IDLE;
+        }
+
+        // The colliders on the player's hands that press buttons when they touch them
+        readonly System.Collections.Generic.List<Collider> disabledTouch = new System.Collections.Generic.List<Collider>();
+        void SetHandTouch(bool left, bool enabled)
+        {
+            if (enabled)
+            {
+                foreach (var collider in disabledTouch)
+                    if (collider) collider.enabled = true;
+                disabledTouch.Clear();
+                return;
+            }
+            var tagger = GorillaTagger.Instance;
+            var touch = left ? tagger.leftHandTriggerCollider : tagger.rightHandTriggerCollider;
+            if (!touch) return;
+            foreach (var collider in touch.GetComponentsInChildren<Collider>())
+            {
+                if (!collider.enabled) continue;
+                collider.enabled = false;
+                disabledTouch.Add(collider);
+            }
         }
 
         void AnimateHands()
@@ -293,6 +320,8 @@ namespace WalkSimulator.Animators
             reticle.gameObject.SetActive(false);
             state = State.IDLE;
             StopAllCoroutines();
+            // A stopped tap never reaches the end where it turns these back on
+            SetHandTouch(true, true);
         }
 
         void OnDestory()

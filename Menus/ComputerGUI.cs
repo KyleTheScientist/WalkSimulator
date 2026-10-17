@@ -23,9 +23,12 @@ namespace WalkSimulator.Menus
         List<TMP_Text> screens = new List<TMP_Text>();
         AnimatorBase cachedAnimator;
         TMP_Text currentScreen;
-        Camera overrideCam;
+        bool inUse;
+        Vector3 viewPosition;
+        Quaternion viewRotation;
+        const float ViewFieldOfView = 90;
 
-        public bool IsInUse => overrideCam.enabled;
+        public bool IsInUse => inUse;
 
         // The text objects that show the computer screen: one per terminal, plus the main computer's
         void RefreshScreens()
@@ -91,18 +94,6 @@ namespace WalkSimulator.Menus
         void Awake()
         {
             Instance = this;
-            var cameraObject = new GameObject("WalkSim First Person Camera");
-            var shoulderCamera = WalkSimulator.Tools.Extensions.ShoulderCamera();
-
-            overrideCam = cameraObject.AddComponent<Camera>();
-            overrideCam.fieldOfView = 90;
-            overrideCam.nearClipPlane = shoulderCamera.nearClipPlane;
-            overrideCam.farClipPlane = shoulderCamera.farClipPlane;
-            overrideCam.targetDisplay = shoulderCamera.targetDisplay;
-            overrideCam.cullingMask = shoulderCamera.cullingMask;
-            overrideCam.depth = shoulderCamera.depth + 1;
-            overrideCam.targetDisplay = shoulderCamera.targetDisplay;
-            overrideCam.enabled = false;
 
         }
 
@@ -114,20 +105,19 @@ namespace WalkSimulator.Menus
 
         void Update()
         {
-            if (Keyboard.current.eKey.wasPressedThisFrame && inRange && !overrideCam.enabled)
+            if (Keyboard.current.eKey.wasPressedThisFrame && inRange && !inUse)
             {
-                overrideCam.enabled = true;
+                inUse = true;
                 cachedAnimator = Rig.Instance.Animator;
                 Rig.Instance.Animator = null;
                 return;
             }
 
-            if (overrideCam.enabled)
+            if (inUse)
             {
                 if (Keyboard.current.escapeKey.wasPressedThisFrame)
                 {
-                    overrideCam.enabled = false;
-                    Rig.Instance.Animator = cachedAnimator;
+                    Exit();
                     return;
                 }
                 foreach (var key in buttonMapping.Keys)
@@ -168,15 +158,32 @@ namespace WalkSimulator.Menus
                 Vector3 scale = rect.lossyScale;
                 float halfWidth = rect.rect.width * Mathf.Abs(scale.x) / 2;
                 float halfHeight = rect.rect.height * Mathf.Abs(scale.y) / 2;
-                float tanHalfFov = Mathf.Tan(overrideCam.fieldOfView * Mathf.Deg2Rad / 2);
-                float distance = Mathf.Max(halfHeight, halfWidth / overrideCam.aspect) / tanHalfFov * 1.15f;
-                overrideCam.transform.rotation = Quaternion.LookRotation(rect.forward, rect.up);
-                overrideCam.transform.position = ScreenCenter(currentScreen) - rect.forward * distance;
+                float tanHalfFov = Mathf.Tan(ViewFieldOfView * Mathf.Deg2Rad / 2);
+                var camera = ShoulderCameraControl.Camera;
+                float aspect = camera ? camera.aspect : 16f / 9f;
+                float distance = Mathf.Max(halfHeight, halfWidth / aspect) / tanHalfFov * 1.15f;
+                viewRotation = Quaternion.LookRotation(rect.forward, rect.up);
+                viewPosition = ScreenCenter(currentScreen) - rect.forward * distance;
             }
-            else
+            else if (inUse)
             {
-                overrideCam.enabled = false;
+                Exit();
             }
+        }
+
+        // Look at the screen through the game's own camera
+        void LateUpdate()
+        {
+            if (!inUse) return;
+            ShoulderCameraControl.Take(this, ViewFieldOfView);
+            ShoulderCameraControl.Place(viewPosition, viewRotation);
+        }
+
+        void Exit()
+        {
+            inUse = false;
+            ShoulderCameraControl.Release(this);
+            Rig.Instance.Animator = cachedAnimator;
         }
 
         void OnGUI()
@@ -184,7 +191,7 @@ namespace WalkSimulator.Menus
             string text = "";
             if (inRange)
             {
-                text = overrideCam.enabled ?
+                text = inUse ?
                     "Press [Escape] to exit" :
                     "Press [E] to use computer";
             }
