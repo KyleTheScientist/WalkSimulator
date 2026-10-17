@@ -193,7 +193,8 @@ namespace WalkSimulator.Animators
             if (!rig.onGround)
                 return;
 
-            moveWeight = Mathf.Lerp(moveWeight, NotMoving ? 0 : 1, Extensions.Smoothing(.15f));
+            // No stepping bob while sliding
+            moveWeight = Mathf.Lerp(moveWeight, NotMoving || rig.sliding ? 0 : 1, Extensions.Smoothing(.15f));
 
             // Gait bob: two bumps per cycle (one per step). Each hand plants at phase = its offset,
             // so cos(4*pi*phase) puts the low points at the plants and the high points mid-stance.
@@ -256,6 +257,13 @@ namespace WalkSimulator.Animators
                 wasOnGround = true;
                 needsPlant = false;
                 wasMoving = false;
+            }
+
+            if (rig.sliding)
+            {
+                SlidePose();
+                wasMoving = false;
+                return;
             }
 
             float dt = Time.deltaTime;
@@ -422,6 +430,25 @@ namespace WalkSimulator.Animators
 
         void Orient(Limb limb, Vector3 position, Vector3 normal, Vector3 forwardHint, float curl) =>
             limb.driver.Place(position, normal, forwardHint, curl);
+
+        // Sliding: no stepping; hands rest on the ground beside you and slide along with you,
+        // a little wider and further forward for balance. They stay planted there for when the
+        // slide ends.
+        void SlidePose()
+        {
+            float s = Scale;
+            foreach (var limb in new[] { left, right })
+            {
+                var hand = limb.driver;
+                float side = limb == left ? -1 : 1;
+                var spot = GroundBelow(hand.DefaultPosition + (body.right * side * .08f + body.forward * .05f) * s, limb);
+                PlantAt(limb, spot);
+                hand.followInBodySpace = true;
+                hand.followRate = .4f;
+                Vector3 direction = rig.slideVelocity.sqrMagnitude > .01f ? rig.slideVelocity : body.forward;
+                Orient(limb, spot.point, spot.normal, direction, 0);
+            }
+        }
 
         // In the air: a hand that just slapped a wall stays on it briefly; near a wall you're holding
         // toward, hands reach for it; otherwise hands up and a little forward like the classic walk

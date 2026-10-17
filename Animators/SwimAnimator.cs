@@ -34,24 +34,57 @@ namespace WalkSimulator.Animators
 
         static float Scale => GTPlayer.Instance.scale;
 
-        // How far the point is below the water surface (negative above it), if in water
-        static bool DepthBelowSurface(Vector3 point, out float depth)
+        // How far the point is below the water surface (negative above it), if in water.
+        // The volume's own surface query can fail, so fall back to the game's head surface query,
+        // and finally just to whether the head is under.
+        static bool DepthBelowSurface(Vector3 point, out float depth) => DepthBelowSurface(point, out depth, out _);
+
+        static bool DepthBelowSurface(Vector3 point, out float depth, out string source)
         {
             depth = 0;
+            source = "not in water";
             var player = GTPlayer.Instance;
-            WaterVolume water = player.InWater ? player.CurrentWaterVolume : null;
-            if (!water) return false;
-            if (!water.GetSurfaceQueryForPoint(point, out WaterVolume.SurfaceQuery query, false)) return false;
-            depth = query.surfacePoint.y - point.y;
+            if (!player.InWater) return false;
+
+            WaterVolume water = player.CurrentWaterVolume;
+            if (water && water.GetSurfaceQueryForPoint(point, out WaterVolume.SurfaceQuery query, false))
+            {
+                depth = query.surfacePoint.y - point.y;
+                source = "volume surface";
+                return true;
+            }
+            var headSurface = player.WaterSurfaceForHead;
+            if (headSurface.surfaceNormal != Vector3.zero)
+            {
+                depth = headSurface.surfacePoint.y - point.y;
+                source = "head surface";
+                return true;
+            }
+            depth = player.HeadInWater ? 10 : 0;
+            source = player.HeadInWater ? "head under (no surface)" : "head above (no surface)";
             return true;
         }
+
+        static bool wasInWater;
 
         /// <summary>Called while walking; switches to swimming once the body is submerged.</summary>
         public static void CheckEnter()
         {
             var plugin = Plugin.Instance;
-            if (!plugin.IsWalking || Time.time - lastLeap < .6f) return;
             var rig = Rig.Instance;
+            if (!rig) return;
+
+            // Log each time you go in or out of the water, to help diagnose swimming
+            bool inWater = GTPlayer.Instance.InWater;
+            if (inWater != wasInWater)
+            {
+                wasInWater = inWater;
+                DepthBelowSurface(rig.body.position, out float d, out string source);
+                Logging.Info(inWater ? "Entered water:" : "Left water", inWater ? $"depth {d:0.00} ({source}), on ground: {rig.onGround}, walking: {plugin.IsWalking}" : "");
+            }
+
+            if (!plugin.IsWalking || Time.time - lastLeap < .6f) return;
+
             // Deep enough, or in water with no floor under you (the game's buoyancy keeps you near
             // the surface, so dropping in from above never gets you deep)
             if (DepthBelowSurface(rig.body.position, out float depth) && (depth > EnterDepth * Scale || !rig.onGround))

@@ -88,7 +88,7 @@ namespace WalkSimulator.Menus
             {
                 lines.Add(("Rope", ""));
                 lines.Add(("WASD", "Swing"));
-                lines.Add(("Space / Ctrl", "Climb up / down"));
+                lines.Add(("Space", "Jump off"));
                 lines.Add(("Release click", "Let go"));
             }
             else if (animator == plugin.emoteAnimator)

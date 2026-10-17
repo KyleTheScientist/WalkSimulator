@@ -12,22 +12,23 @@ namespace WalkSimulator.Animators
     /// <summary>
     /// Swinging on ropes. While walking, hold either mouse button near a rope to grab it.
     /// Uses the game's own rope attach/detach, so the rope simulation takes your weight and other
-    /// players see you on it. WASD pumps the swing, Space/Ctrl climb up/down the rope, and letting
-    /// go of the mouse button flings you off with the rope's momentum.
+    /// players see you on it. WASD pumps the swing, Space launches you off (like ziplines), and
+    /// letting go of the mouse button drops you off with the rope's momentum.
     /// </summary>
     public class RopeAnimator : AnimatorBase
     {
         // ---- Tuning ----
         const float GrabReach = .8f;            // rope bone within this distance of the grab point
         const float HangDistance = .55f;        // body hangs this far below the grabbing hand
-        const float PumpAcceleration = 6f;      // m/s^2 the held direction adds to the rope's swing
-        const float ClimbRate = 4f;             // rope bones per second when climbing
+        const float PumpAcceleration = 1f;      // m/s^2 the held direction adds to the rope's swing
+        const float MaxPumpSpeed = 3f;          // pumping stops adding speed past this (m/s)
         const float ReleaseBoost = 1.2f;        // multiplier on the rope's velocity when letting go
+        const float JumpOffMultiplier = 1.3f;   // Space launches you this much harder than a normal jump
         const float RegrabDelay = .4f;          // seconds before you can grab again after letting go
 
         public AnimatorBase returnTo;
         GorillaRopeSwing rope;
-        float boneIndex;                        // fractional so climbing is smooth
+        int boneIndex;
         int upStep;                             // which way along the bones is up the rope (-1 or 1)
         Vector3 lastBonePosition, boneVelocity;
         bool attached;
@@ -37,7 +38,9 @@ namespace WalkSimulator.Animators
 
         static float Scale => GTPlayer.Instance.scale;
         static bool GrabHeld => Mouse.current.leftButton.isPressed || Mouse.current.rightButton.isPressed;
-        int Bone => Mathf.Clamp(Mathf.RoundToInt(boneIndex), 0, rope.nodes.Length - 1);
+        int Bone => Mathf.Clamp(boneIndex, 0, rope.nodes.Length - 1);
+        // The same speed a normal jump's impulse gives
+        float JumpSpeed => 250 * Scale / rigidbody.mass;
         Transform BoneTransform => rope.nodes[Bone];
 
         /// <summary>Called while walking; grabs a nearby rope while a mouse button is held.</summary>
@@ -115,9 +118,12 @@ namespace WalkSimulator.Animators
             catch (Exception e) { Logging.Exception(e); }
         }
 
-        void Release()
+        void Release(bool jump = false)
         {
             Vector3 velocity = boneVelocity * ReleaseBoost;
+            // Jumping off cancels any downward speed, then launches upward
+            if (jump)
+                velocity.y = Mathf.Max(velocity.y, 0) + JumpSpeed * JumpOffMultiplier;
             Rig.Instance.Animator = returnTo ? returnTo : Plugin.Instance.walkAnimator;
             rigidbody.linearVelocity = velocity;
         }
@@ -127,6 +133,8 @@ namespace WalkSimulator.Animators
             if (!Plugin.Instance.Enabled || rig == null) return;
             if (!rope || !rope.isActiveAndEnabled || !GrabHeld)
                 Release();
+            else if (Keyboard.current.spaceKey.wasPressedThisFrame)
+                Release(jump: true);
         }
 
         public override void Animate()
@@ -136,29 +144,15 @@ namespace WalkSimulator.Animators
             float s = Scale;
             Vector3 input = InputHandler.inputDirection;
 
-            // Climb up or down the rope
-            int previousBone = Bone;
-            boneIndex = Mathf.Clamp(boneIndex + upStep * input.y * ClimbRate * dt, 0, rope.nodes.Length - 1);
-            if (Bone != previousBone && attached)
-            {
-                // Re-attach at the new bone so the rope (and other players) see where you're holding
-                try
-                {
-                    rope.DetachLocalPlayer();
-                    rope.AttachLocalPlayer(XRNode.RightHand, BoneTransform, Vector3.zero, boneVelocity);
-                }
-                catch (Exception e) { Logging.Exception(e); }
-            }
-
             // Track how the grabbed point is moving
             Vector3 bonePosition = BoneTransform.position;
             boneVelocity = (bonePosition - lastBonePosition) / Mathf.Max(dt, .0001f);
             lastBonePosition = bonePosition;
 
-            // Pump the swing in the held direction
+            // Pump the swing in the held direction, up to a speed limit
             Vector3 push = body.TransformDirection(new Vector3(input.x, 0, input.z));
             push.y = 0;
-            if (push != Vector3.zero)
+            if (push != Vector3.zero && Vector3.Dot(boneVelocity, push.normalized) < MaxPumpSpeed * s)
             {
                 try
                 {

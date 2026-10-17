@@ -2,6 +2,7 @@
 using GorillaExtensions;
 using GorillaLocomotion;
 using GorillaNetworking;
+using HarmonyLib;
 using Photon.Pun;
 using Photon.Realtime;
 using PlayFab.ClientModels;
@@ -31,10 +32,19 @@ namespace WalkSimulator.Rigging
         public Vector3 smoothedGroundPosition { get; set; }
         // How slippery the ground under the body is, 0 (grippy) .. 1 (ice), from the game's surface data
         public float slipperiness;
+        // Sliding on slippery ground while walking
+        public bool sliding;
+        public Vector3 slideVelocity;
 
-        // On slippery ground, how much of the way to the desired velocity the body gets per tick
-        // (at 90Hz) when fully slippery, and the slip below which ground counts as normal
-        const float SlipperyControl = .015f, SlipThreshold = .1f;
+        // Slip below which ground counts as normal
+        const float SlipThreshold = .1f;
+        // Below walking speed, holding a direction pushes you along (like skating off from a stop)
+        const float PushOffSpeed = 1.6f, PushOffAcceleration = 3f;
+        // Fallbacks if the game's values can't be read
+        const float DefaultBaseSlideControl = .00425f, DefaultSlideVelocityLimit = 8f;
+
+        static readonly AccessTools.FieldRef<GorillaTagger, float> baseSlideControlRef =
+            AccessTools.FieldRefAccess<GorillaTagger, float>("baseSlideControl");
 
         private float scale = 1f;
         private float speed = 4f, raycastLength = 1.3f, raycastRadius = .3f;
@@ -93,23 +103,24 @@ namespace WalkSimulator.Rigging
 
         void Move()
         {
-            if (!active) return;
+            if (!active)
+            {
+                SetSliding(false);
+                return;
+            }
 
             Vector3 desired = (targetPosition - body.position) * speed;
             if (onGround && slipperiness > SlipThreshold && Plugin.Instance.IsWalking)
             {
-                // Slippery: keep sliding, steer only gradually, and slide downhill on slopes.
-                // Height is still held firmly so the body doesn't sink into the ground.
-                float slip = Mathf.InverseLerp(SlipThreshold, 1, slipperiness);
-                Vector3 current = Vector3.ProjectOnPlane(rigidbody.linearVelocity, Vector3.up);
-                Vector3 wanted = Vector3.ProjectOnPlane(desired, Vector3.up);
-                Vector3 horizontal = Vector3.Lerp(current, wanted, Tools.Extensions.Smoothing(Mathf.Lerp(1, SlipperyControl, slip)));
-                Vector3 downhill = Vector3.ProjectOnPlane(Vector3.ProjectOnPlane(Physics.gravity, lastNormal), Vector3.up);
-                horizontal += downhill * slip * Time.deltaTime;
-                rigidbody.linearVelocity = horizontal + Vector3.up * desired.y;
+                Slide();
+                // Height is still held firmly so the body doesn't sink into the ground
+                rigidbody.linearVelocity = Vector3.ProjectOnPlane(slideVelocity, Vector3.up) + Vector3.up * desired.y;
             }
             else
+            {
+                SetSliding(false);
                 rigidbody.linearVelocity = desired;
+            }
 
             if (!useGravity)
                 rigidbody.AddForce(-Physics.gravity * rigidbody.mass * scale);
@@ -119,6 +130,56 @@ namespace WalkSimulator.Rigging
             //DebugPoint.Get("Skeleton.position", Color.blue).position = body.position;
             //DebugPoint.Get("Skeleton.velocity", Color.green).position = body.position + rigidbody.linearVelocity;
             //DebugPoint.Get("Skeleton.smoothedGroundPosition", Color.yellow).position = smoothedGroundPosition;
+        }
+
+        // Sliding the way the game does it: gravity along the surface with no friction, and steering
+        // that only turns the slide toward the held direction without adding speed (holding the
+        // opposite way steers along the same line rather than braking)
+        void Slide()
+        {
+            float dt = Time.deltaTime;
+            if (!sliding)
+                slideVelocity = Vector3.ProjectOnPlane(rigidbody.linearVelocity, lastNormal);
+            SetSliding(true);
+
+            slideVelocity += Physics.gravity * scale * dt;
+            slideVelocity = Vector3.ProjectOnPlane(slideVelocity, lastNormal);
+
+            Vector3 steer = Vector3.ProjectOnPlane(body.TransformDirection(InputHandler.inputDirectionNoY), lastNormal).normalized;
+            if (steer != Vector3.zero)
+            {
+                float speed = slideVelocity.magnitude;
+                if (speed < PushOffSpeed * scale)
+                    slideVelocity += steer * PushOffAcceleration * scale * dt;
+                else
+                {
+                    Vector3 axis = Vector3.Dot(slideVelocity, steer) >= 0 ? steer : -steer;
+                    slideVelocity = Vector3.Slerp(slideVelocity, axis * speed, SteerFraction(dt));
+                }
+            }
+
+            float limit = GTPlayer.Instance.slideVelocityLimit;
+            if (limit <= 0) limit = DefaultSlideVelocityLimit;
+            slideVelocity = Vector3.ClampMagnitude(slideVelocity, limit * scale);
+        }
+
+        // The game turns the slide by 1 - (1 - baseSlideControl)^120 per second, spread over frames
+        float SteerFraction(float dt)
+        {
+            float baseSlideControl = DefaultBaseSlideControl;
+            try { baseSlideControl = baseSlideControlRef(GorillaTagger.Instance); }
+            catch { }
+            float retainedPerSecond = Mathf.Pow(1 - baseSlideControl, 120);
+            return 1 - Mathf.Pow(retainedPerSecond, dt);
+        }
+
+        // Also tells the game the body is sliding, which plays its body slide sound
+        void SetSliding(bool value)
+        {
+            if (value == sliding) return;
+            sliding = value;
+            try { GTPlayer.Instance.IsBodySliding = value; }
+            catch { }
         }
 
         void OnGroundRaycast()
