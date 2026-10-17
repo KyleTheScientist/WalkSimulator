@@ -16,8 +16,11 @@ namespace WalkSimulator.Animators
     {
         public enum State
         {
-            IDLE, WAIT, BUTTON, GRAB
+            IDLE, WAIT, BUTTON, GRAB, SLIDER
         }
+
+        // How much of a slider's range one pixel of mouse movement covers while dragging it
+        const float SliderSensitivity = .0025f;
 
         Transform reticle;
         State state;
@@ -62,6 +65,12 @@ namespace WalkSimulator.Animators
                 .OrderBy(hit => hit.distance);
             foreach (var hit in hits)
             {
+                var slider = SliderHandle.Find(hit.transform);
+                if (slider != null)
+                {
+                    yield return DragSlider(main, slider);
+                    break;
+                }
                 var pressable = FindPressable(hit.transform);
                 if (pressable.component
                     || hit.transform.GetComponent<GorillaKeyboardButton>()
@@ -72,6 +81,97 @@ namespace WalkSimulator.Animators
                     break;
                 }
             }
+            state = State.IDLE;
+        }
+
+        // A slider the game can move to a given progress (0..1), wrapped up the same way for each kind
+        class SliderHandle
+        {
+            public Component component;
+            public Func<float> Get;
+            public Action<float> Set;
+            public Transform knob;
+
+            public static SliderHandle Find(Transform target)
+            {
+                var pushable = target.GetComponentInParent<PushableSlider>();
+                if (pushable)
+                    return new SliderHandle { component = pushable, knob = pushable.transform, Get = pushable.GetProgress, Set = pushable.SetProgress };
+
+                var manipulatable = target.GetComponentInParent<ManipulatableSlider>();
+                if (manipulatable)
+                {
+                    var handle = new SliderHandle { component = manipulatable, knob = manipulatable.transform };
+                    // Drag along whichever axis the slider actually moves on
+                    if (manipulatable.maxXOffset != manipulatable.minXOffset)
+                    {
+                        handle.Get = manipulatable.GetProgressX;
+                        handle.Set = p => manipulatable.SetProgress(p, manipulatable.GetProgressY(), manipulatable.GetProgressZ());
+                    }
+                    else if (manipulatable.maxYOffset != manipulatable.minYOffset)
+                    {
+                        handle.Get = manipulatable.GetProgressY;
+                        handle.Set = p => manipulatable.SetProgress(manipulatable.GetProgressX(), p, manipulatable.GetProgressZ());
+                    }
+                    else
+                    {
+                        handle.Get = manipulatable.GetProgressZ;
+                        handle.Set = p => manipulatable.SetProgress(manipulatable.GetProgressX(), manipulatable.GetProgressY(), p);
+                    }
+                    return handle;
+                }
+                return null;
+            }
+
+            // Which way the knob moves as progress increases: nudge it and see
+            public Vector3 Axis()
+            {
+                float progress = Get();
+                float nudge = progress < .5f ? .05f : -.05f;
+                Vector3 before = knob.position;
+                Set(progress + nudge);
+                Vector3 after = knob.position;
+                Set(progress);
+                return (after - before) * Mathf.Sign(nudge);
+            }
+        }
+
+        // Hold the mouse button and move the mouse left/right to slide it; the camera stops turning
+        // while dragging, and the hand follows the knob
+        IEnumerator DragSlider(HandDriver hand, SliderHandle slider)
+        {
+            state = State.SLIDER;
+            var button = hand.isLeft ? Mouse.current.leftButton : Mouse.current.rightButton;
+            HeadDriver.Instance.turn = false;
+            hand.grip = true;
+            hand.followRate = .5f;
+
+            float progress = 0, direction = 1;
+            try
+            {
+                progress = slider.Get();
+                // Moving the mouse right should move the knob to the right on screen
+                direction = Vector3.Dot(slider.Axis(), Camera.main.transform.right) >= 0 ? 1 : -1;
+            }
+            catch (Exception e) { Logging.Exception(e); }
+
+            while (button.isPressed && slider.component)
+            {
+                progress = Mathf.Clamp01(progress + Mouse.current.delta.value.x * SliderSensitivity * direction);
+                try { slider.Set(progress); }
+                catch (Exception e) { Logging.Exception(e); break; }
+
+                Vector3 knob = slider.knob.position, view = Camera.main.transform.forward;
+                hand.targetPosition = knob - view * .03f;
+                hand.lookAt = knob + view;
+                hand.up = hand.isLeft ? head.right : -head.right;
+                yield return null;
+            }
+
+            HeadDriver.Instance.turn = true;
+            hand.grip = false;
+            hand.followRate = .1f;
+            hand.targetPosition = hand.DefaultPosition;
             state = State.IDLE;
         }
 

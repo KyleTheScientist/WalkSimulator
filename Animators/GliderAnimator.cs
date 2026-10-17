@@ -25,11 +25,14 @@ namespace WalkSimulator.Animators
         const float SecondHandTimeout = 1f;     // keep trying to get the second hand on for this long
         const float HandSpread = .3f;           // each hand this far to the side while flying
         const float HandHeight = .35f;          // hands this far above the head while flying
-        // How far in front of the head the hands sit with W/S released. The glider pitches from where
-        // your head is relative to the handle; hands further forward tipped the nose down
-        const float HandForward = 0f;
         const float RollHeight = .15f;          // A/D raises one hand and lowers the other this much
-        const float PitchReach = .2f;           // W/S moves the hands this far forward/back
+        // The glider pitches from where your head is relative to the handle (hands further forward
+        // raise the nose). Rather than guess the level point, the hands slide forward/back until the
+        // nose points where you want: level, or diving with W / climbing with S.
+        const float StartHandForward = .3f;     // starting guess, in front of the head
+        const float MinHandForward = -.3f, MaxHandForward = .8f;
+        const float PitchTarget = .3f;          // sine of the nose-down angle W aims for (S the opposite)
+        const float LevelingRate = 1f;          // m/s of hand movement per unit of pitch error
         const float RegrabDelay = .5f;
         const float WalkSpeed = 4f, SprintMultiplier = 3f, RideHeight = .46f;  // same as walking
         const float JumpGrace = .5f;            // after jumping, don't count as grounded for this long
@@ -40,6 +43,10 @@ namespace WalkSimulator.Animators
         public AnimatorBase returnTo;
         GliderHoldable glider;
         float grabStart, firstHeldTime, jumpTime = -100;
+        float handForward = StartHandForward;
+
+        // Handles to slip into the game's grab checks for each hand (see EquipmentInteractorPatch)
+        public static InteractionPoint injectLeft, injectRight;
         bool wasHeld;
 
         // The rig counts as grounded with ground ~1.3m below, so ignore that right after a jump
@@ -119,6 +126,7 @@ namespace WalkSimulator.Animators
             base.Cleanup();
             leftHand.followRate = rightHand.followRate = .1f;
             lastRelease = Time.time;
+            injectLeft = injectRight = null;
             try
             {
                 if (IsHeld)
@@ -197,7 +205,12 @@ namespace WalkSimulator.Animators
                     float side = hand.isLeft ? -1 : 1;
                     Vector3 point = handleTransform.position + handleTransform.right * side * HandSpread * .5f * s;
                     hand.Place(point, -body.forward, Vector3.up);
-                    if (HoldsWith(hand))
+                    bool holding = HoldsWith(hand);
+                    // The game only grabs handles its hand collider is touching, which doesn't always
+                    // register (e.g. from the ground), so also put the handle in its overlap list
+                    var inject = holding ? null : handle;
+                    if (hand.isLeft) injectLeft = inject; else injectRight = inject;
+                    if (holding)
                         hand.grip = hand.trigger = true;
                     else
                     {
@@ -208,6 +221,7 @@ namespace WalkSimulator.Animators
                 }
                 return;
             }
+            injectLeft = injectRight = null;
 
             // Full grip with every hand that's holding it
             foreach (var hand in new[] { leftHand, rightHand })
@@ -231,11 +245,16 @@ namespace WalkSimulator.Animators
                 // Flying: the glider moves the body, so leave the body alone
                 rig.active = false;
                 rig.useGravity = true;
+
+                // Slide the hands forward/back until the nose points where you want it
+                float noseDown = -glider.transform.forward.y;
+                float wanted = input.z * PitchTarget;
+                handForward = Mathf.Clamp(handForward + (noseDown - wanted) * LevelingRate * Time.deltaTime,
+                    MinHandForward, MaxHandForward);
             }
 
-            // Steer the way you'd hold it in VR: hands overhead and apart; A/D tilts them to roll,
-            // W/S pushes them forward or pulls them back
-            Vector3 center = head.position + (Vector3.up * HandHeight + body.forward * (HandForward + input.z * PitchReach)) * s;
+            // Steer the way you'd hold it in VR: hands overhead and apart; A/D tilts them to roll
+            Vector3 center = head.position + (Vector3.up * HandHeight + body.forward * handForward) * s;
             foreach (var hand in new[] { leftHand, rightHand })
             {
                 float side = hand.isLeft ? -1 : 1;
