@@ -1,5 +1,6 @@
 ﻿using GorillaLocomotion;
 using GorillaNetworking;
+using GorillaTagScripts.VirtualStumpCustomMaps.UI;
 using HarmonyLib;
 using System;
 using System.Collections;
@@ -179,8 +180,18 @@ namespace WalkSimulator.Animators
         // GamePressableButton, ...) or ButtonActivationWithHand(isLeftHand). Touching them with the
         // hand doesn't always register for newer buttons like the elevator's.
         static readonly string[] pressMethodNames = { "Click", "ButtonActivationWithHand" };
-        static (Component component, MethodInfo method) FindPressable(Transform target)
+        static (Component component, Action<bool> press) FindPressable(Transform target)
         {
+            // Virtual Stump touchscreens: Click does nothing; touching runs this instead
+            var touchPoint = target.GetComponentInParent<CustomMapsScreenTouchPoint>();
+            if (touchPoint)
+                return (touchPoint, _ => PressTouchPoint(touchPoint));
+
+            // Other touchscreen buttons press through PressButton()
+            var touchscreenButton = target.GetComponentInParent<SITouchscreenButton>();
+            if (touchscreenButton)
+                return (touchscreenButton, _ => touchscreenButton.PressButton());
+
             foreach (var component in target.GetComponentsInParent<MonoBehaviour>())
             {
                 if (!component) continue;
@@ -188,13 +199,31 @@ namespace WalkSimulator.Animators
                 {
                     var method = AccessTools.Method(component.GetType(), name, new[] { typeof(bool) });
                     if (method != null)
-                        return (component, method);
+                        return (component, isLeft => method.Invoke(component, new object[] { isLeft }));
                 }
             }
             return (null, null);
         }
 
-        IEnumerator PressButton(HandDriver hand, Vector3 buttonPoint, (Component component, MethodInfo method) pressable)
+        // What a Virtual Stump touch point does when a hand touches it from the front
+        static readonly AccessTools.FieldRef<CustomMapsScreenTouchPoint, CustomMapsTerminalScreen> touchScreenRef =
+            AccessTools.FieldRefAccess<CustomMapsScreenTouchPoint, CustomMapsTerminalScreen>("screen");
+        static readonly AccessTools.FieldRef<CustomMapsScreenTouchPoint, CustomMapKeyboardBinding> touchBindingRef =
+            AccessTools.FieldRefAccess<CustomMapsScreenTouchPoint, CustomMapKeyboardBinding>("keyBinding");
+        static readonly FieldInfo touchPressTime = AccessTools.Field(typeof(CustomMapsScreenTouchPoint), "pressTime");
+        static readonly MethodInfo touchPressedEvent = AccessTools.Method(typeof(CustomMapsScreenTouchPoint), "OnButtonPressedEvent");
+
+        static void PressTouchPoint(CustomMapsScreenTouchPoint touchPoint)
+        {
+            touchPressTime?.SetValue(null, Time.time);
+            touchPressedEvent?.Invoke(touchPoint, null);
+            touchPoint.PressButtonColourUpdate();
+            var screen = touchScreenRef(touchPoint);
+            if (screen)
+                screen.PressButton(touchBindingRef(touchPoint));
+        }
+
+        IEnumerator PressButton(HandDriver hand, Vector3 buttonPoint, (Component component, Action<bool> press) pressable)
         {
             state = State.BUTTON;
 
@@ -203,7 +232,7 @@ namespace WalkSimulator.Animators
             {
                 try
                 {
-                    pressable.method.Invoke(pressable.component, new object[] { hand.isLeft });
+                    pressable.press(hand.isLeft);
                 }
                 catch (Exception e) { Logging.Exception(e); }
             }
