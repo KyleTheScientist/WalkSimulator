@@ -254,7 +254,9 @@ namespace WalkSimulator.Animators
             {
                 Vector3 reach = tip ? FingertipPosition(tip) - hand.transform.position
                                     : toButton.normalized * FallbackFingerReach * GTPlayer.Instance.scale;
-                hand.targetPosition = buttonPoint - reach;
+                // Small sideways correction so the tip lands right on the cursor (mirrored per hand)
+                Vector3 sideways = Camera.main.transform.right * (hand.isLeft ? -1 : 1) * FingertipSideCorrection * GTPlayer.Instance.scale;
+                hand.targetPosition = buttonPoint - reach + sideways;
                 yield return null;
             }
 
@@ -269,6 +271,8 @@ namespace WalkSimulator.Animators
 
         // How far the fingertip is from the hand if the finger bones can't be found
         const float FallbackFingerReach = .1f;
+        // The tip still landed a little to the outside of the cursor; nudge it in by this much
+        const float FingertipSideCorrection = .025f;
         readonly Transform[] fingertips = new Transform[2];
 
         // The last index bone is the joint at the start of the fingertip segment; the visible tip is
