@@ -4,6 +4,7 @@ using GorillaNetworking;
 using HarmonyLib;
 using Photon.Pun;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
@@ -64,6 +65,7 @@ namespace WalkSimulator
                     emoteAnimator.enabled = false;
                     handAnimator.enabled = false;
                     grabAnimator.enabled = false;
+                    StartCoroutine(SelectDefaultAnimator());
                 }
                 else
                 {
@@ -77,6 +79,16 @@ namespace WalkSimulator
                     computerGUI?.Obliterate();
                 }
             }
+        }
+
+        // Start out walking so you can look and move without opening the radial menu first.
+        // Wait a couple frames so the radial menu has been hidden (hiding it applies its own selection).
+        IEnumerator SelectDefaultAnimator()
+        {
+            yield return null;
+            yield return null;
+            if (Enabled && Rig.Instance && !Rig.Instance.Animator)
+                Rig.Instance.Animator = walkAnimator;
         }
 
         void Awake()
@@ -136,6 +148,7 @@ namespace WalkSimulator
         {
             string platform = PlayFabAuthenticator.instance.platform?.ToString() ?? "";
             IsSteam = platform.ToLower().Contains("steam");
+            Logging.Info("Game initialized; platform:", platform, "SteamVR state:", Valve.VR.SteamVR.initializedState);
             Enabled = true;
         }
 

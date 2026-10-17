@@ -65,6 +65,8 @@ namespace WalkSimulator.Menus
         bool cursorWasLocked, wasTurning;
         void OnEnable()
         {
+            // Closing the menu without picking anything keeps the current animator
+            selectedAnimator = Rig.Instance?.Animator;
             cursorWasLocked = HeadDriver.Instance.LockCursor;
             wasTurning = HeadDriver.Instance.turn;
             HeadDriver.Instance.LockCursor = false;

@@ -71,7 +71,8 @@ namespace WalkSimulator
             }
 
             float x, y, z;
-            if (Plugin.IsSteam)
+            // Only read SteamVR actions when SteamVR is actually running (it isn't without a headset)
+            if (Plugin.IsSteam && SteamVR.initializedState == SteamVR.InitializedStates.InitializeSuccess)
             {
                 Vector2 xz;
                 xz = SteamVR_Actions.gorillaTag_LeftJoystick2DAxis.axis;

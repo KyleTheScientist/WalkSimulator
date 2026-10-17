@@ -45,6 +45,7 @@ namespace WalkSimulator.Rigging
                 if (_animator != null && value != _animator)
                     _animator.Cleanup();
                 _animator = value;
+                Logging.Info("Animator set to", value ? value.GetType().Name : "none");
                 if (_animator)
                 {
                     _animator.enabled = true;

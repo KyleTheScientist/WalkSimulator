@@ -161,10 +161,15 @@ namespace WalkSimulator.Menus
         Dictionary<KeyControl, GorillaKeyboardButton> buttonMapping = new Dictionary<KeyControl, GorillaKeyboardButton>();
         void BuildButtonMap()
         {
+            // There are several keyboards in the world now (one per terminal); presses all go
+            // to GorillaComputer by binding, so the first button found for each key is enough
             foreach (var button in FindObjectsByType<GorillaKeyboardButton>(FindObjectsSortMode.None))
             {
-                Key key = keyMapping[button.characterString];
-                buttonMapping.Add(Keyboard.current[key], button);
+                if (button.characterString is null || !keyMapping.TryGetValue(button.characterString, out Key key))
+                    continue;
+                var control = Keyboard.current[key];
+                if (!buttonMapping.ContainsKey(control))
+                    buttonMapping.Add(control, button);
             }
         }
 
