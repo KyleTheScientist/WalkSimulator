@@ -34,35 +34,44 @@ namespace WalkSimulator.Animators
 
         static float Scale => GTPlayer.Instance.scale;
 
-        // How far the point is below the water surface (negative above it), if in water.
-        // The volume's own surface query can fail, so fall back to the game's head surface query,
-        // and finally just to whether the head is under.
+        // How far the point is below the water surface (negative above it), if it's in water.
+        // Finds the water directly (the game's own InWater flag doesn't get set for this mod's
+        // body), then gets the surface from the volume's query, a ray straight down onto the water
+        // collider, or failing that the top of the collider.
         static bool DepthBelowSurface(Vector3 point, out float depth) => DepthBelowSurface(point, out depth, out _);
+
+        static readonly Collider[] overlaps = new Collider[8];
 
         static bool DepthBelowSurface(Vector3 point, out float depth, out string source)
         {
             depth = 0;
             source = "not in water";
-            var player = GTPlayer.Instance;
-            if (!player.InWater) return false;
-
-            WaterVolume water = player.CurrentWaterVolume;
-            if (water && water.GetSurfaceQueryForPoint(point, out WaterVolume.SurfaceQuery query, false))
+            int waterLayer = GTPlayer.Instance.waterLayer.value;
+            if (waterLayer == 0) waterLayer = LayerMask.GetMask("Water");
+            int count = Physics.OverlapSphereNonAlloc(point, .05f * Scale, overlaps, waterLayer, QueryTriggerInteraction.Collide);
+            for (int i = 0; i < count; i++)
             {
-                depth = query.surfacePoint.y - point.y;
-                source = "volume surface";
+                var collider = overlaps[i];
+                var water = collider.GetComponentInParent<WaterVolume>();
+                if (!water) continue;
+                if (water.GetSurfaceQueryForPoint(point, out WaterVolume.SurfaceQuery query, false))
+                {
+                    depth = query.surfacePoint.y - point.y;
+                    source = "volume surface";
+                }
+                else if (collider.Raycast(new Ray(point + Vector3.up * 50, Vector3.down), out RaycastHit hit, 100))
+                {
+                    depth = hit.point.y - point.y;
+                    source = "collider top";
+                }
+                else
+                {
+                    depth = collider.bounds.max.y - point.y;
+                    source = "collider bounds";
+                }
                 return true;
             }
-            var headSurface = player.WaterSurfaceForHead;
-            if (headSurface.surfaceNormal != Vector3.zero)
-            {
-                depth = headSurface.surfacePoint.y - point.y;
-                source = "head surface";
-                return true;
-            }
-            depth = player.HeadInWater ? 10 : 0;
-            source = player.HeadInWater ? "head under (no surface)" : "head above (no surface)";
-            return true;
+            return false;
         }
 
         static bool wasInWater;
@@ -75,12 +84,11 @@ namespace WalkSimulator.Animators
             if (!rig) return;
 
             // Log each time you go in or out of the water, to help diagnose swimming
-            bool inWater = GTPlayer.Instance.InWater;
+            bool inWater = DepthBelowSurface(rig.body.position, out float d, out string source);
             if (inWater != wasInWater)
             {
                 wasInWater = inWater;
-                DepthBelowSurface(rig.body.position, out float d, out string source);
-                Logging.Info(inWater ? "Entered water:" : "Left water", inWater ? $"depth {d:0.00} ({source}), on ground: {rig.onGround}, walking: {plugin.IsWalking}" : "");
+                Logging.Info(inWater ? "Entered water:" : "Left water", inWater ? $"depth {d:0.00} ({source}), on ground: {rig.onGround}, walking: {plugin.IsWalking}, game thinks in water: {GTPlayer.Instance.InWater}" : "");
             }
 
             if (!plugin.IsWalking || Time.time - lastLeap < .6f) return;

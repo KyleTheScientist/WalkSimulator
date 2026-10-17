@@ -38,10 +38,14 @@ namespace WalkSimulator.Rigging
 
         // Slip below which ground counts as normal
         const float SlipThreshold = .1f;
-        // Below walking speed, holding a direction pushes you along (like skating off from a stop)
-        const float PushOffSpeed = 1.6f, PushOffAcceleration = 3f;
-        // Fallbacks if the game's values can't be read
-        const float DefaultBaseSlideControl = .00425f, DefaultSlideVelocityLimit = 8f;
+        // Below your normal walk/sprint speed, holding a direction pushes you up to it (like
+        // skating off); faster than that, it only steers
+        const float PushOffAcceleration = 10f;
+        // Fallback if the game's value can't be read
+        const float DefaultBaseSlideControl = .00425f;
+        // Just a safety cap; the game itself doesn't cap slide speed (its slideVelocityLimit only
+        // limits velocity into the surface)
+        const float MaxSlideSpeed = 20f;
 
         static readonly AccessTools.FieldRef<GorillaTagger, float> baseSlideControlRef =
             AccessTools.FieldRefAccess<GorillaTagger, float>("baseSlideControl");
@@ -149,8 +153,11 @@ namespace WalkSimulator.Rigging
             if (steer != Vector3.zero)
             {
                 float speed = slideVelocity.magnitude;
-                if (speed < PushOffSpeed * scale)
-                    slideVelocity += steer * PushOffAcceleration * scale * dt;
+                // Matches the walk's speed: Rig moves 4x the target offset per second, and the walk
+                // offsets the target by speed / 10 (4, or 12 sprinting)
+                float pushOffSpeed = (Keyboard.current.leftShiftKey.isPressed ? 12f : 4f) * .4f * scale;
+                if (speed < pushOffSpeed)
+                    slideVelocity += steer * Mathf.Min(PushOffAcceleration * scale * dt, pushOffSpeed - speed);
                 else
                 {
                     Vector3 axis = Vector3.Dot(slideVelocity, steer) >= 0 ? steer : -steer;
@@ -158,9 +165,7 @@ namespace WalkSimulator.Rigging
                 }
             }
 
-            float limit = GTPlayer.Instance.slideVelocityLimit;
-            if (limit <= 0) limit = DefaultSlideVelocityLimit;
-            slideVelocity = Vector3.ClampMagnitude(slideVelocity, limit * scale);
+            slideVelocity = Vector3.ClampMagnitude(slideVelocity, MaxSlideSpeed * scale);
         }
 
         // The game turns the slide by 1 - (1 - baseSlideControl)^120 per second, spread over frames
@@ -178,6 +183,8 @@ namespace WalkSimulator.Rigging
         {
             if (value == sliding) return;
             sliding = value;
+            if (value)
+                Logging.Info($"Sliding (slipperiness {slipperiness:0.00})");
             try { GTPlayer.Instance.IsBodySliding = value; }
             catch { }
         }

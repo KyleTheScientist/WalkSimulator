@@ -101,6 +101,11 @@ namespace WalkSimulator.Animators
             leftHand.followRate = rightHand.followRate = .1f;
             flyBlend = bank = 0;
             GTPlayer.Instance.locomotionEnabledLayers = layersBackup;
+            // Leaving noclip on would leave the colliders as triggers, which (among other things)
+            // water ignores
+            noClipActive = false;
+            GTPlayer.Instance.headCollider.isTrigger = false;
+            GTPlayer.Instance.bodyCollider.isTrigger = false;
         }
 
         public override void Setup()
