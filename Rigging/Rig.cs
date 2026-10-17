@@ -29,6 +29,12 @@ namespace WalkSimulator.Rigging
         public Vector3 targetPosition, lastNormal, lastGroundPosition;
         public bool onGround, active, useGravity = true;
         public Vector3 smoothedGroundPosition { get; set; }
+        // How slippery the ground under the body is, 0 (grippy) .. 1 (ice), from the game's surface data
+        public float slipperiness;
+
+        // On slippery ground, how much of the way to the desired velocity the body gets per tick
+        // (at 90Hz) when fully slippery, and the slip below which ground counts as normal
+        const float SlipperyControl = .015f, SlipThreshold = .1f;
 
         private float scale = 1f;
         private float speed = 4f, raycastLength = 1.3f, raycastRadius = .3f;
@@ -89,11 +95,21 @@ namespace WalkSimulator.Rigging
         {
             if (!active) return;
 
-            rigidbody.linearVelocity = Vector3.Lerp(
-                rigidbody.linearVelocity,
-                (targetPosition - body.position) * speed,
-                1f
-            );
+            Vector3 desired = (targetPosition - body.position) * speed;
+            if (onGround && slipperiness > SlipThreshold && Plugin.Instance.IsWalking)
+            {
+                // Slippery: keep sliding, steer only gradually, and slide downhill on slopes.
+                // Height is still held firmly so the body doesn't sink into the ground.
+                float slip = Mathf.InverseLerp(SlipThreshold, 1, slipperiness);
+                Vector3 current = Vector3.ProjectOnPlane(rigidbody.linearVelocity, Vector3.up);
+                Vector3 wanted = Vector3.ProjectOnPlane(desired, Vector3.up);
+                Vector3 horizontal = Vector3.Lerp(current, wanted, Tools.Extensions.Smoothing(Mathf.Lerp(1, SlipperyControl, slip)));
+                Vector3 downhill = Vector3.ProjectOnPlane(Vector3.ProjectOnPlane(Physics.gravity, lastNormal), Vector3.up);
+                horizontal += downhill * slip * Time.deltaTime;
+                rigidbody.linearVelocity = horizontal + Vector3.up * desired.y;
+            }
+            else
+                rigidbody.linearVelocity = desired;
 
             if (!useGravity)
                 rigidbody.AddForce(-Physics.gravity * rigidbody.mass * scale);
@@ -139,11 +155,14 @@ namespace WalkSimulator.Rigging
             else
             {
                 onGround = false;
+                slipperiness = 0;
                 return;
             }
 
             lastNormal = hit.normal;
             onGround = true;
+            try { slipperiness = GTPlayer.Instance.GetSlidePercentage(hit); }
+            catch { slipperiness = 0; }
             lastGroundPosition = hit.point;
             lastGroundPosition.x = body.position.x;
             lastGroundPosition.z = body.position.z;

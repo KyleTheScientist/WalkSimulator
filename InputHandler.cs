@@ -34,9 +34,11 @@ namespace WalkSimulator
             if (Keyboard.current.f6Key.wasPressedThisFrame)
                 Plugin.Instance.ToggleWalkStyle();
 
-            // Walking switches to swimming in deep water and to riding when grabbing a zipline
+            // Walking switches to swimming in deep water, and to riding/swinging when grabbing a
+            // zipline or rope
             SwimAnimator.CheckEnter();
             ZiplineAnimator.CheckGrab();
+            RopeAnimator.CheckGrab();
 
             var radialMenu = Plugin.Instance.radialMenu;
             radialMenu.enabled = Keyboard.current.tabKey.isPressed;

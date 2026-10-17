@@ -25,7 +25,7 @@ namespace WalkSimulator.Animators
         const float HandSpacing = .14f;         // each hand this far along the cable from center
         const float Drag = .1f;                 // fraction of speed lost per second
         const float DefaultMaxSpeed = 12f;      // if the zipline has no max speed set
-        const float JumpOffSpeed = 3f;          // m/s upward when jumping off
+        const float JumpOffMultiplier = 1.3f;   // jumping off launches you this much harder than a normal jump
         const float RegrabDelay = .4f;          // seconds before you can grab again after letting go
 
         static readonly AccessTools.FieldRef<GorillaZipline, BezierSpline> splineRef =
@@ -119,9 +119,15 @@ namespace WalkSimulator.Animators
             lastRelease = Time.time;
         }
 
-        void Release(float upwardBoost = 0)
+        // The same speed a normal jump's impulse gives
+        float JumpSpeed => 250 * Scale / rigidbody.mass;
+
+        void Release(bool jump = false)
         {
-            Vector3 velocity = rigidbody.linearVelocity + Vector3.up * upwardBoost * Scale;
+            Vector3 velocity = rigidbody.linearVelocity;
+            // Jumping off cancels any downward speed, then launches upward
+            if (jump)
+                velocity.y = Mathf.Max(velocity.y, 0) + JumpSpeed * JumpOffMultiplier;
             Rig.Instance.Animator = returnTo ? returnTo : Plugin.Instance.walkAnimator;
             rigidbody.linearVelocity = velocity;
         }
@@ -132,7 +138,7 @@ namespace WalkSimulator.Animators
             if (!zipline || !spline || !GrabHeld)
                 Release();
             else if (Keyboard.current.spaceKey.wasPressedThisFrame)
-                Release(JumpOffSpeed);
+                Release(jump: true);
         }
 
         public override void Animate()

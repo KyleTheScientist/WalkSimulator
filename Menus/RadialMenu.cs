@@ -21,8 +21,14 @@ namespace WalkSimulator.Menus
         public List<Icon> icons;
         AnimatorBase selectedAnimator;
 
+        const float MenuScale = .6f;
+
         void Awake()
         {
+            // Shrink everything under the canvas
+            foreach (Transform child in transform)
+                child.localScale *= MenuScale;
+
             var walk = transform.Find("Icons/Walk").GetComponent<Image>();
             var pose = transform.Find("Icons/Pose").GetComponent<Image>();
             var interact = transform.Find("Icons/Interact").GetComponent<Image>();

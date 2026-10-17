@@ -33,7 +33,8 @@ namespace WalkSimulator
             handAnimator,
             grabAnimator,
             swimAnimator,
-            ziplineAnimator;
+            ziplineAnimator,
+            ropeAnimator;
         public static ConfigEntry<bool> ClassicWalk, ShowControls;
 
         // Whichever walk style is selected
@@ -75,6 +76,7 @@ namespace WalkSimulator
                     grabAnimator = this.gameObject.GetOrAddComponent<InteractAnimator>();
                     swimAnimator = this.gameObject.GetOrAddComponent<SwimAnimator>();
                     ziplineAnimator = this.gameObject.GetOrAddComponent<ZiplineAnimator>();
+                    ropeAnimator = this.gameObject.GetOrAddComponent<RopeAnimator>();
                     if (!radialMenu)
                     {
                         radialMenu = Instantiate(
@@ -85,7 +87,7 @@ namespace WalkSimulator
                     controlsOverlay = this.gameObject.GetOrAddComponent<ControlsOverlay>();
                     // This runs again on every modded room join/leave, so leave the animator
                     // that's in use running (its Update handles things like jumping)
-                    foreach (var animator in new[] { proceduralWalkAnimator, classicWalkAnimator, flyAnimator, emoteAnimator, handAnimator, grabAnimator, swimAnimator, ziplineAnimator })
+                    foreach (var animator in new[] { proceduralWalkAnimator, classicWalkAnimator, flyAnimator, emoteAnimator, handAnimator, grabAnimator, swimAnimator, ziplineAnimator, ropeAnimator })
                         animator.enabled = animator == Rig.Instance.Animator;
                     StartCoroutine(SelectDefaultAnimator());
                 }
@@ -101,6 +103,7 @@ namespace WalkSimulator
                     grabAnimator?.Obliterate();
                     swimAnimator?.Obliterate();
                     ziplineAnimator?.Obliterate();
+                    ropeAnimator?.Obliterate();
                     computerGUI?.Obliterate();
                     controlsOverlay?.Obliterate();
                 }

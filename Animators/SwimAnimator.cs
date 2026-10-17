@@ -22,6 +22,7 @@ namespace WalkSimulator.Animators
         const float FloatDepth = .2f;           // body this far under the surface while floating
         const float Buoyancy = 1.5f;            // how strongly you return to floating depth
         const float EnterDepth = .3f;           // body this deep starts swimming
+        const float ExitDepth = .15f;           // standing on the bottom this shallow stops swimming
         const float LeapDepth = .45f;           // Space within this depth of the surface leaps out
         const float LeapSpeed = 5f;             // m/s upward when leaping out
         const float StrokeRate = .9f;           // breaststrokes per second at swim speed
@@ -50,8 +51,10 @@ namespace WalkSimulator.Animators
         {
             var plugin = Plugin.Instance;
             if (!plugin.IsWalking || Time.time - lastLeap < .6f) return;
-            var body = Rig.Instance.body;
-            if (DepthBelowSurface(body.position, out float depth) && depth > EnterDepth * Scale)
+            var rig = Rig.Instance;
+            // Deep enough, or in water with no floor under you (the game's buoyancy keeps you near
+            // the surface, so dropping in from above never gets you deep)
+            if (DepthBelowSurface(rig.body.position, out float depth) && (depth > EnterDepth * Scale || !rig.onGround))
             {
                 var swim = plugin.swimAnimator as SwimAnimator;
                 swim.returnTo = Rig.Instance.Animator;
@@ -81,7 +84,8 @@ namespace WalkSimulator.Animators
         void Update()
         {
             if (!Plugin.Instance.Enabled || rig == null) return;
-            if (!DepthBelowSurface(body.position, out float depth))
+            // Out of the water, or standing on the bottom in the shallows
+            if (!DepthBelowSurface(body.position, out float depth) || (rig.onGround && depth < ExitDepth * Scale))
             {
                 Leave();
                 return;

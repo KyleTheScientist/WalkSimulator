@@ -56,7 +56,7 @@ namespace WalkSimulator.Menus
                 if (!classic)
                     lines.Add(("Space + into wall", "Wall jump (repeat to climb)"));
                 lines.Add(("Ctrl", "Crouch"));
-                lines.Add(("Hold click", "Grab a zipline overhead"));
+                lines.Add(("Hold click", "Grab a zipline or rope"));
                 lines.Add(("F6", classic ? "Switch to new walk" : "Switch to classic walk"));
             }
             else if (animator == plugin.flyAnimator)
@@ -83,6 +83,13 @@ namespace WalkSimulator.Menus
                 lines.Add(("Zipline", ""));
                 lines.Add(("Release click", "Let go"));
                 lines.Add(("Space", "Jump off"));
+            }
+            else if (animator == plugin.ropeAnimator)
+            {
+                lines.Add(("Rope", ""));
+                lines.Add(("WASD", "Swing"));
+                lines.Add(("Space / Ctrl", "Climb up / down"));
+                lines.Add(("Release click", "Let go"));
             }
             else if (animator == plugin.emoteAnimator)
             {
