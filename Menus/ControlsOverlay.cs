@@ -76,7 +76,7 @@ namespace WalkSimulator.Menus
                 lines.Add(("Space / Ctrl", "Up / down"));
                 lines.Add(("Mouse", "Look"));
                 lines.Add(("Shift", "Faster"));
-                lines.Add(("Scroll", "Flight speed"));
+                lines.Add(("Scroll", $"Flight speed ({(plugin.flyAnimator as FlyAnimator).Speed:0.##}x)"));
                 lines.Add(("N", "Noclip: " + (noClip ? "on" : "off")));
             }
             else if (animator == plugin.swimAnimator)

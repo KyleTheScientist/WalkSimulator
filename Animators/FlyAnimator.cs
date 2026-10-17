@@ -13,8 +13,10 @@ namespace WalkSimulator.Animators
     public class FlyAnimator : AnimatorBase
     {
         float speed = 1;
-        float minSpeed = 0;
+        float minSpeed = .25f;                  // never zero, or you couldn't move at all
         float maxSpeed = 5;
+        float speedPerNotch = .25f;             // how much each scroll-wheel notch changes speed
+        public float Speed => speed;
         int layersBackup;
         bool noClipActive = false;
         public bool NoClip => noClipActive;
@@ -32,7 +34,7 @@ namespace WalkSimulator.Animators
 
         void Update()
         {
-            speed += Mouse.current.scroll.ReadValue().y / 1000f;
+            speed += InputHandler.ScrollNotches * speedPerNotch;
             speed = Mathf.Clamp(speed, minSpeed, maxSpeed);
             if(Keyboard.current.nKey.wasPressedThisFrame)
             {

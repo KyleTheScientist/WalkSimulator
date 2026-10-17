@@ -93,8 +93,9 @@ namespace WalkSimulator.Rigging
                 angles.x = angles.x - Mouse.current.delta.value.y / 10f;
                 if (angles.x > 180)
                     angles.x -= 360;
-                //clamp rotation between -45 and 45 
-                angles.x = Mathf.Clamp(angles.x, -60, 60);
+                // Look up to 80 degrees up and 85 down (short of straight up/down, where the view flips),
+                // so buttons low and close are reachable
+                angles.x = Mathf.Clamp(angles.x, -80, 85);
                 GorillaTagger.Instance.offlineVRRig.headConstraint.eulerAngles = angles;
                 angles.y += 90;
                 //head.localEulerAngles = angles;

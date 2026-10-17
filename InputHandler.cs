@@ -14,6 +14,18 @@ namespace WalkSimulator
         public static InputHandler Instance;
         public static Vector3 inputDirection, inputDirectionNoY;
         public static string deviceName = "DDED";
+
+        // Mouse wheel movement in notches. Depending on the input settings Unity reports either about
+        // 1 or 120 per notch, so normalize it.
+        public static float ScrollNotches
+        {
+            get
+            {
+                float y = Mouse.current.scroll.ReadValue().y;
+                return InputSystem.settings.scrollDeltaBehavior == InputSettings.ScrollDeltaBehavior.KeepPlatformSpecificInputRange
+                    ? y / 120f : y;
+            }
+        }
         bool Jump => Keyboard.current.spaceKey.wasPressedThisFrame;
         void Awake()
         {
