@@ -78,7 +78,7 @@ namespace WalkSimulator.Animators
                     || hit.transform.GetComponent<GorillaPlayerLineButton>()
                     || hit.transform.name.ToLower().Contains("button"))
                 {
-                    yield return PressButton(main, hit.point - ray.direction * .03f, pressable);
+                    yield return PressButton(main, hit.point - ray.direction * .01f, pressable);
                     break;
                 }
             }
@@ -246,10 +246,17 @@ namespace WalkSimulator.Animators
             Vector3 toButton = buttonPoint - hand.DefaultPosition;
             hand.grip = true;   // grip without trigger makes a pointing finger
             hand.followRate = .5f;
-            hand.targetPosition = buttonPoint;
             hand.lookAt = buttonPoint + toButton;
             hand.up = hand.isLeft ? head.right : -head.right;
-            yield return new WaitForSeconds(.12f);
+            // Land the index fingertip, not the hand, on the cursor
+            Transform tip = IndexFingertip(hand.isLeft);
+            for (float end = Time.time + .12f; Time.time < end; )
+            {
+                Vector3 reach = tip ? tip.position - hand.transform.position
+                                    : toButton.normalized * FallbackFingerReach * GTPlayer.Instance.scale;
+                hand.targetPosition = buttonPoint - reach;
+                yield return null;
+            }
 
             hand.targetPosition = hand.DefaultPosition;
             yield return new WaitForSeconds(.1f);
@@ -258,6 +265,32 @@ namespace WalkSimulator.Animators
             hand.followRate = .1f;
             SetHandTouch(hand.isLeft, true);
             state = State.IDLE;
+        }
+
+        // How far the fingertip is from the hand if the finger bones can't be found
+        const float FallbackFingerReach = .1f;
+        readonly Transform[] fingertips = new Transform[2];
+
+        // The farthest index finger bone on the player's hand model
+        Transform IndexFingertip(bool left)
+        {
+            int i = left ? 0 : 1;
+            if (fingertips[i]) return fingertips[i];
+            var rig = GorillaTagger.Instance.offlineVRRig;
+            var map = left ? rig.leftHand : rig.rightHand;
+            if (map == null || !map.rigTarget) return null;
+            float farthest = 0;
+            foreach (var bone in map.rigTarget.GetComponentsInChildren<Transform>())
+            {
+                if (!bone.name.ToLower().Contains("index")) continue;
+                float distance = (bone.position - map.rigTarget.position).sqrMagnitude;
+                if (distance > farthest)
+                {
+                    farthest = distance;
+                    fingertips[i] = bone;
+                }
+            }
+            return fingertips[i];
         }
 
         // The colliders on the player's hands that press buttons when they touch them

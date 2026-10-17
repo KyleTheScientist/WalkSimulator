@@ -2,10 +2,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using Valve.VR;
 using WalkSimulator.Animators;
 using WalkSimulator.Menus;
 using WalkSimulator.Rigging;
+using WalkSimulator.Tools;
 
 namespace WalkSimulator
 {
@@ -106,14 +106,13 @@ namespace WalkSimulator
             }
 
             float x, y, z;
-            // Only read SteamVR actions when SteamVR is actually running (it isn't without a headset)
-            if (Plugin.IsSteam && SteamVR.initializedState == SteamVR.InitializedStates.InitializeSuccess)
+            // Only read SteamVR actions when SteamVR is actually running (it isn't without a headset,
+            // and the Oculus version of the game doesn't have it at all)
+            if (Plugin.IsSteam && SteamVRCompat.Running && SteamVRCompat.TryGetJoysticks(out Vector2 left, out Vector2 right))
             {
-                Vector2 xz;
-                xz = SteamVR_Actions.gorillaTag_LeftJoystick2DAxis.axis;
-                x = xz.x;
-                y = SteamVR_Actions.gorillaTag_RightJoystick2DAxis.axis.y;
-                z = xz.y;
+                x = left.x;
+                y = right.y;
+                z = left.y;
             }
             else
             {

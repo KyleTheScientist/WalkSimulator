@@ -12,7 +12,6 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
-using Valve.VR.InteractionSystem;
 using WalkSimulator.Animators;
 using WalkSimulator.Tools;
 using WalkSimulatorClassic;

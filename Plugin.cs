@@ -137,7 +137,7 @@ namespace WalkSimulator
                 try
                 {
                     return UnityEngine.XR.XRSettings.isDeviceActive
-                        || Valve.VR.SteamVR.initializedState == Valve.VR.SteamVR.InitializedStates.InitializeSuccess;
+                        || SteamVRCompat.Running;
                 }
                 catch { return false; }
             }
@@ -213,7 +213,7 @@ namespace WalkSimulator
         {
             string platform = PlayFabAuthenticator.instance.platform?.ToString() ?? "";
             IsSteam = platform.ToLower().Contains("steam");
-            Logging.Info("Game initialized; platform:", platform, "SteamVR state:", Valve.VR.SteamVR.initializedState);
+            Logging.Info("Game initialized; platform:", platform, "SteamVR state:", SteamVRCompat.State);
             Enabled = true;
         }
 
