@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.3
+
+- **Works on the Oculus/Meta PC version of the game.** The mod didn't start there before.
+- **Interact mode taps land the fingertip on the cursor**, instead of the hand.
+- **Keyboards in Interact mode:** finished the fix for keys your hand passes over on the way to the one you clicked. 3.0.2 still registered them in some cases.
+
 ## 3.0.2
 
 - **Fixed a black screen in first person** for players who use the alarm clock. First person and the computer view now look through the game's own camera.
