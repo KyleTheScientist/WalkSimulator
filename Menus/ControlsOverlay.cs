@@ -96,6 +96,7 @@ namespace WalkSimulator.Menus
                 lines.Add(("Glider", ""));
                 lines.Add(("A / D", "Roll (tilt hands)"));
                 lines.Add(("W / S", "Hands forward / back"));
+                lines.Add(("On the ground", "WASD walk, Shift sprint, Space jump"));
                 lines.Add(("Mouse", "Look / turn"));
                 lines.Add(("Release click", "Let go"));
             }

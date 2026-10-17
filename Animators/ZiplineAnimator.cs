@@ -181,15 +181,20 @@ namespace WalkSimulator.Animators
             Vector3 palmDirection = Vector3.Dot(across, body.forward) >= 0 ? across : -across;
             // Each hand on its own side of the body along the cable
             float sideSign = Vector3.Dot(direction, body.right) >= 0 ? 1 : -1;
+            // When the cable runs front-to-back along the body, one hand is behind the other; turn
+            // that one around so the palms face each other like a real grip
+            bool alongBody = Mathf.Abs(Vector3.Dot(direction, body.forward)) > .5f;
             float handT = HandSpacing * s / metersPerT;
             foreach (var hand in new[] { leftHand, rightHand })
             {
                 float offset = (hand.isLeft ? -handT : handT) * sideSign;
                 Vector3 grip = spline.GetPoint(Mathf.Clamp01(t + offset));
-                Vector3 position = grip + (Vector3.down * GripDrop - palmDirection * .03f) * s;
+                bool rear = alongBody && Vector3.Dot(grip - body.position, body.forward) < Vector3.Dot(cable - body.position, body.forward);
+                Vector3 palm = rear ? -palmDirection : palmDirection;
+                Vector3 position = grip + (Vector3.down * GripDrop - palm * .03f) * s;
                 hand.followInBodySpace = true;
                 hand.followRate = .5f;
-                hand.Place(position, -palmDirection, Vector3.up);
+                hand.Place(position, -palm, Vector3.up);
             }
         }
     }

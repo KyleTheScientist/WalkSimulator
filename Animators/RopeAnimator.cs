@@ -20,6 +20,8 @@ namespace WalkSimulator.Animators
         // ---- Tuning ----
         const float GrabReach = .8f;            // rope bone within this distance of the grab point
         const float HangDistance = .55f;        // body hangs this far below the grabbing hand
+        const float HangBehind = .22f;          // and this far behind the rope, so it isn't inside it
+        const float GripBehind = .04f;          // hands this far behind the rope's center to wrap around it
         const float PumpAcceleration = 1f;      // m/s^2 the held direction adds to the rope's swing
         const float MaxPumpSpeed = 3f;          // pumping stops adding speed past this (m/s)
         const float ReleaseBoost = 1.2f;        // multiplier on the rope's velocity when letting go
@@ -185,8 +187,11 @@ namespace WalkSimulator.Animators
                 catch (Exception e) { Logging.Exception(e); }
             }
 
-            // Hang below the hand; drive the body directly so it stays with the rope
-            Vector3 hang = bonePosition + Vector3.down * HangDistance * s;
+            // Hang below the hand and a little behind the rope (facing it); drive the body directly
+            // so it stays with the rope
+            Vector3 facing = Vector3.ProjectOnPlane(body.forward, Vector3.up).normalized;
+            if (facing == Vector3.zero) facing = Vector3.forward;
+            Vector3 hang = bonePosition + (Vector3.down * HangDistance - facing * HangBehind) * s;
             rig.active = false;
             rigidbody.linearVelocity = boneVelocity + (hang - body.position) * 10f;
 
@@ -199,13 +204,13 @@ namespace WalkSimulator.Animators
             Vector3 lower = bonePosition, upper = bonePosition + ropeUp * HandGap * s;
             foreach (var hand in new[] { leftHand, rightHand })
             {
-                Vector3 grip = hand.isLeft ? upper : lower;
+                // Grip the rope from behind like a pole: palm toward the rope, fingers wrapping around
+                // it sideways (left hand's fingers point right, right hand's point left)
+                Vector3 grip = (hand.isLeft ? upper : lower) - facing * GripBehind * s;
+                Vector3 across = hand.isLeft ? body.right : -body.right;
                 hand.followInBodySpace = true;
                 hand.followRate = .5f;
-                // Wrap around the rope: back of the hand faces away from the body
-                Vector3 outward = Vector3.ProjectOnPlane(grip - body.position, ropeUp).normalized;
-                if (outward == Vector3.zero) outward = body.forward;
-                hand.Place(grip, outward, ropeUp);
+                hand.Place(grip, -facing, across);
             }
         }
     }

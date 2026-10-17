@@ -13,26 +13,36 @@ namespace WalkSimulator.Animators
     /// (controller) positions are moved onto the handle and grip is squeezed, so the game picks the
     /// glider up normally, and then the hands are held overhead and moved to steer, the way you would
     /// in VR. A/D tilts the hands to roll, W/S moves them forward/back. Let go of the mouse button to drop it.
+    /// On the ground you can walk (WASD, Shift) and jump (Space) while holding it.
     /// </summary>
     public class GliderAnimator : AnimatorBase
     {
         // ---- Tuning ----
         const float GrabReach = 1.3f;           // handle within this distance of the head
-        const float GrabTimeout = .75f;         // give up if the game hasn't picked it up by then
+        const float GrabTimeout = 1.5f;         // give up if the game hasn't picked it up by then
+        const float OnHandleDistance = .1f;     // a hand this close to its spot on the handle can squeeze
+        const float SqueezePeriod = .2f;        // re-squeeze this often until the game picks it up
         const float HandSpread = .3f;           // each hand this far to the side while flying
         const float HandHeight = .35f;          // hands this far above the head while flying
         const float HandForward = .15f;         // and this far in front
         const float RollHeight = .15f;          // A/D raises one hand and lowers the other this much
         const float PitchReach = .2f;           // W/S moves the hands this far forward/back
         const float RegrabDelay = .5f;
+        const float WalkSpeed = 4f, SprintMultiplier = 3f, RideHeight = .46f;  // same as walking
+        const float JumpGrace = .5f;            // after jumping, don't count as grounded for this long
 
         static readonly AccessTools.FieldRef<GliderHoldable, InteractionPoint> handleRef =
             AccessTools.FieldRefAccess<GliderHoldable, InteractionPoint>("handle");
 
         public AnimatorBase returnTo;
         GliderHoldable glider;
-        float grabStart;
+        float grabStart, jumpTime = -100;
         bool wasHeld;
+
+        // The rig counts as grounded with ground ~1.3m below, so ignore that right after a jump
+        bool OnGround => rig.onGround && Time.time - jumpTime > JumpGrace;
+        // The same speed a normal jump's impulse gives
+        float JumpSpeed => 250 * Scale / rigidbody.mass;
 
         static GliderHoldable[] gliders = new GliderHoldable[0];
         static float lastSearch = -100, lastRelease = -100;
@@ -116,7 +126,17 @@ namespace WalkSimulator.Animators
         {
             if (!Plugin.Instance.Enabled || rig == null) return;
             if (!glider || !GrabHeld)
+            {
                 Leave();
+                return;
+            }
+            if (IsHeld && OnGround && Keyboard.current.spaceKey.wasPressedThisFrame)
+            {
+                jumpTime = Time.time;
+                Vector3 velocity = rigidbody.linearVelocity;
+                velocity.y = Mathf.Max(velocity.y, 0) + JumpSpeed;
+                rigidbody.linearVelocity = velocity;
+            }
         }
 
         public override void Animate()
@@ -138,9 +158,10 @@ namespace WalkSimulator.Animators
             {
                 // Real hand positions matter here: the game grabs and steers with them
                 hand.hideControllerTransform = false;
-                hand.grip = true;
                 hand.followInBodySpace = true;
                 hand.followRate = .5f;
+                if (held)
+                    hand.grip = true;
             }
 
             if (!held)
@@ -154,21 +175,42 @@ namespace WalkSimulator.Animators
                 }
                 var handle = handleRef(glider);
                 Transform handleTransform = handle ? handle.transform : glider.transform;
+                // The game only grabs at the moment grip is pressed with the hand on the handle, so keep
+                // the hand open while reaching, then squeeze, letting go briefly every so often to retry
+                bool squeezePhase = Mathf.Repeat(Time.time - grabStart, SqueezePeriod) > SqueezePeriod * .3f;
                 foreach (var hand in new[] { leftHand, rightHand })
                 {
                     float side = hand.isLeft ? -1 : 1;
                     Vector3 point = handleTransform.position + handleTransform.right * side * HandSpread * .5f * s;
                     hand.Place(point, -body.forward, Vector3.up);
+                    bool onHandle = hand.transform.position.Distance(point) < OnHandleDistance * s;
+                    hand.grip = onHandle && squeezePhase;
                 }
                 return;
             }
 
-            // Flying: the glider moves the body, so leave the body alone
-            rig.active = false;
+            Vector3 input = InputHandler.inputDirection;
+            if (OnGround)
+            {
+                // On the ground: walk around holding it, the same way walking moves the body
+                // (Rig moves 4x the target offset per second)
+                rig.active = true;
+                rig.useGravity = false;
+                Vector3 direction = body.TransformDirection(InputHandler.inputDirectionNoY);
+                direction.y = 0;
+                float speed = Keyboard.current.leftShiftKey.isPressed ? WalkSpeed * SprintMultiplier : WalkSpeed;
+                rig.targetPosition = rig.lastGroundPosition + Vector3.up * RideHeight * s + direction * s * speed / 10f;
+                input = Vector3.zero; // hold the glider level while walking
+            }
+            else
+            {
+                // Flying: the glider moves the body, so leave the body alone
+                rig.active = false;
+                rig.useGravity = true;
+            }
 
             // Steer the way you'd hold it in VR: hands overhead and apart; A/D tilts them to roll,
             // W/S pushes them forward or pulls them back
-            Vector3 input = InputHandler.inputDirection;
             Vector3 center = head.position + (Vector3.up * HandHeight + body.forward * (HandForward + input.z * PitchReach)) * s;
             foreach (var hand in new[] { leftHand, rightHand })
             {
