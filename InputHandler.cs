@@ -33,6 +33,8 @@ namespace WalkSimulator
                 HeadDriver.Instance.ToggleCam();
             if (Keyboard.current.f6Key.wasPressedThisFrame)
                 Plugin.Instance.ToggleWalkStyle();
+            if (Keyboard.current.vKey.wasPressedThisFrame)
+                Plugin.Instance.ToggleVRMode();
 
             // Walking switches to swimming in deep water, and to riding/swinging/gliding when
             // grabbing a zipline, rope, glider or broomstick

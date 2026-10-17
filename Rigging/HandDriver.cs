@@ -102,6 +102,24 @@ namespace WalkSimulator.Rigging
             catch (Exception e) { Logging.Exception(e); }
         }
 
+        // Switching back to VR: give the hand back to the controller and let go of any buttons the
+        // mod was holding for it
+        void OnDisable()
+        {
+            try
+            {
+                if (handMap != null && handMap.overrideTarget == transform)
+                    handMap.overrideTarget = null;
+            }
+            catch (Exception e) { Logging.Exception(e); }
+            grip = trigger = primary = secondary = false;
+            followInBodySpace = false;
+            if (isLeft)
+                FingerPatch.forceLeftGrip = FingerPatch.forceLeftTrigger = FingerPatch.forceLeftPrimary = FingerPatch.forceLeftSecondary = false;
+            else
+                FingerPatch.forceRightGrip = FingerPatch.forceRightTrigger = FingerPatch.forceRightPrimary = FingerPatch.forceRightSecondary = false;
+        }
+
         IEnumerator Disable(Action<HandDriver> onDisable)
         {
             transform.position = DefaultPosition;

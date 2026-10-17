@@ -116,14 +116,40 @@ namespace WalkSimulator
             }
         }
 
-        // Start out walking so you can look and move without opening the radial menu first.
+        // Without a headset, start out walking so you can look and move right away. With a headset,
+        // start in VR mode; V (or the Tab menu) switches to desktop controls.
         // Wait a couple frames so the radial menu has been hidden (hiding it applies its own selection).
         IEnumerator SelectDefaultAnimator()
         {
             yield return null;
             yield return null;
-            if (Enabled && Rig.Instance && !Rig.Instance.Animator)
+            if (!Enabled || !Rig.Instance || Rig.Instance.Animator) yield break;
+            if (VRHeadsetActive)
+                Logging.Info("VR headset active: starting in VR mode (press V or Tab for desktop controls)");
+            else
                 Rig.Instance.Animator = walkAnimator;
+        }
+
+        public static bool VRHeadsetActive
+        {
+            get
+            {
+                try
+                {
+                    return UnityEngine.XR.XRSettings.isDeviceActive
+                        || Valve.VR.SteamVR.initializedState == Valve.VR.SteamVR.InitializedStates.InitializeSuccess;
+                }
+                catch { return false; }
+            }
+        }
+
+        // V: switch between VR (the mod stays out of the way) and desktop controls
+        public void ToggleVRMode()
+        {
+            if (!Rig.Instance) return;
+            bool toVR = Rig.Instance.Animator;
+            Rig.Instance.Animator = toVR ? null : walkAnimator;
+            Logging.Info(toVR ? "Switched to VR mode" : "Switched to desktop controls");
         }
 
         void Awake()

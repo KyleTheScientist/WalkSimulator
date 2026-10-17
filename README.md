@@ -21,6 +21,10 @@ WalkSimulator only works in **modded lobbies**. In a public lobby it turns itsel
 
 Press **H** at any time to show or hide the controls for your current mode on screen.
 
+### VR and desktop
+
+Without a VR headset, you start in walk mode. With a headset connected, you start in **VR mode**, where the mod stays out of the way and you play normally in VR. Press **V** at any time to switch between VR and desktop controls, or hold **Tab** to pick a desktop mode.
+
 ### Everywhere
 
 | Key | Action |
@@ -30,6 +34,7 @@ Press **H** at any time to show or hide the controls for your current mode on sc
 | C | Switch between first and third person |
 | Esc | Free / lock the mouse cursor |
 | E | Use a computer or terminal (when standing in front of one) |
+| V | Switch between VR and desktop controls |
 | H | Show / hide controls |
 
 ### Walk

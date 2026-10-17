@@ -45,6 +45,15 @@ namespace WalkSimulator.Menus
                 return lines;
             }
 
+            if (!animator)
+            {
+                lines.Add(("VR mode", ""));
+                lines.Add(("V", "Switch to desktop controls"));
+                lines.Add(("Tab", "Choose a desktop mode"));
+                lines.Add(("H", "Hide controls"));
+                return lines;
+            }
+
             if (animator == plugin.proceduralWalkAnimator || animator == plugin.classicWalkAnimator)
             {
                 bool classic = animator == plugin.classicWalkAnimator;
@@ -134,6 +143,7 @@ namespace WalkSimulator.Menus
             lines.Add(("C", "First / third person"));
             lines.Add(("Esc", "Free / lock cursor"));
             lines.Add(("E", "Use computer (when near one)"));
+            lines.Add(("V", "Switch to VR"));
             lines.Add(("H", "Hide controls"));
             return lines;
         }
