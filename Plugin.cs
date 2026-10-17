@@ -34,7 +34,8 @@ namespace WalkSimulator
             grabAnimator,
             swimAnimator,
             ziplineAnimator,
-            ropeAnimator;
+            ropeAnimator,
+            gliderAnimator;
         public static ConfigEntry<bool> ClassicWalk, ShowControls;
 
         // Whichever walk style is selected
@@ -77,6 +78,7 @@ namespace WalkSimulator
                     swimAnimator = this.gameObject.GetOrAddComponent<SwimAnimator>();
                     ziplineAnimator = this.gameObject.GetOrAddComponent<ZiplineAnimator>();
                     ropeAnimator = this.gameObject.GetOrAddComponent<RopeAnimator>();
+                    gliderAnimator = this.gameObject.GetOrAddComponent<GliderAnimator>();
                     if (!radialMenu)
                     {
                         radialMenu = Instantiate(
@@ -87,7 +89,7 @@ namespace WalkSimulator
                     controlsOverlay = this.gameObject.GetOrAddComponent<ControlsOverlay>();
                     // This runs again on every modded room join/leave, so leave the animator
                     // that's in use running (its Update handles things like jumping)
-                    foreach (var animator in new[] { proceduralWalkAnimator, classicWalkAnimator, flyAnimator, emoteAnimator, handAnimator, grabAnimator, swimAnimator, ziplineAnimator, ropeAnimator })
+                    foreach (var animator in new[] { proceduralWalkAnimator, classicWalkAnimator, flyAnimator, emoteAnimator, handAnimator, grabAnimator, swimAnimator, ziplineAnimator, ropeAnimator, gliderAnimator })
                         animator.enabled = animator == Rig.Instance.Animator;
                     StartCoroutine(SelectDefaultAnimator());
                 }
@@ -104,6 +106,7 @@ namespace WalkSimulator
                     swimAnimator?.Obliterate();
                     ziplineAnimator?.Obliterate();
                     ropeAnimator?.Obliterate();
+                    gliderAnimator?.Obliterate();
                     computerGUI?.Obliterate();
                     controlsOverlay?.Obliterate();
                 }

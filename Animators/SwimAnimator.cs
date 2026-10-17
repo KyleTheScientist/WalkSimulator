@@ -1,5 +1,7 @@
 using GorillaLocomotion;
 using GorillaLocomotion.Swimming;
+using HarmonyLib;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using WalkSimulator.Rigging;
@@ -41,6 +43,11 @@ namespace WalkSimulator.Animators
         static bool DepthBelowSurface(Vector3 point, out float depth) => DepthBelowSurface(point, out depth, out _);
 
         static readonly Collider[] overlaps = new Collider[8];
+        static WaterVolume currentWater;
+
+        static readonly AccessTools.FieldRef<GTPlayer, List<WaterCurrent>> activeCurrentsRef =
+            AccessTools.FieldRefAccess<GTPlayer, List<WaterCurrent>>("activeWaterCurrents");
+        readonly List<WaterCurrent> currents = new List<WaterCurrent>();
 
         static bool DepthBelowSurface(Vector3 point, out float depth, out string source)
         {
@@ -54,6 +61,7 @@ namespace WalkSimulator.Animators
                 var collider = overlaps[i];
                 var water = collider.GetComponentInParent<WaterVolume>();
                 if (!water) continue;
+                currentWater = water;
                 if (water.GetSurfaceQueryForPoint(point, out WaterVolume.SurfaceQuery query, false))
                 {
                     depth = query.surfacePoint.y - point.y;
@@ -164,11 +172,39 @@ namespace WalkSimulator.Animators
                     desired.y += Mathf.Clamp((floatError + bob) * Buoyancy, -1, 1) * Scale;
             }
 
-            velocity = Vector3.Lerp(velocity, desired, Extensions.Smoothing(WaterDrag));
+            // Flowing water carries you: swim relative to the flow, plus the game's own push from it
+            Vector3 flow = Vector3.zero, push = Vector3.zero;
+            foreach (var current in Currents())
+            {
+                if (current.GetCurrentAtPoint(body.position, velocity, Time.deltaTime, out Vector3 currentVelocity, out Vector3 velocityChange))
+                {
+                    flow += currentVelocity;
+                    push += velocityChange;
+                }
+            }
+            desired += flow;
+
+            velocity = Vector3.Lerp(velocity, desired, Extensions.Smoothing(WaterDrag)) + push;
             // Rig moves the body toward its target at 4x the offset per second
             rig.targetPosition = body.position + velocity / 4f;
 
             AnimateHands(input != Vector3.zero, sprinting);
+        }
+
+        // The current of the water you're in, plus any the game is tracking for the player
+        List<WaterCurrent> Currents()
+        {
+            currents.Clear();
+            if (currentWater && currentWater.Current)
+                currents.Add(currentWater.Current);
+            try
+            {
+                foreach (var current in activeCurrentsRef(GTPlayer.Instance))
+                    if (current && !currents.Contains(current))
+                        currents.Add(current);
+            }
+            catch { }
+            return currents;
         }
 
         void AnimateHands(bool moving, bool sprinting)

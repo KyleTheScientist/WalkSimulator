@@ -22,7 +22,8 @@ namespace WalkSimulator.Animators
         // ---- Tuning ----
         const float GrabReach = .9f;            // cable within this distance of the grab point
         const float HangDistance = .75f;        // body hangs this far below the cable
-        const float HandSpacing = .14f;         // each hand this far along the cable from center
+        const float HandSpacing = .17f;         // each hand this far along the cable from center
+        const float GripDrop = .07f;            // hands sit this far below the cable so fingers wrap over it
         const float Drag = .1f;                 // fraction of speed lost per second
         const float DefaultMaxSpeed = 12f;      // if the zipline has no max speed set
         const float JumpOffMultiplier = 1.3f;   // jumping off launches you this much harder than a normal jump
@@ -172,17 +173,23 @@ namespace WalkSimulator.Animators
             rig.active = false;
             rigidbody.linearVelocity = spline.GetDirection(t) * speed + (hang - body.position) * 10f;
 
-            // Both hands on the cable, palms up around it, knuckles along it
+            // Both hands hanging from the cable like a bar: just below it, palms toward it, fingers
+            // pointing up and over the top
+            Vector3 across = Vector3.Cross(Vector3.up, direction).normalized;
+            if (across == Vector3.zero) across = body.right;
+            // Palms face the way the body faces (whichever side of the cable that is)
+            Vector3 palmDirection = Vector3.Dot(across, body.forward) >= 0 ? across : -across;
+            // Each hand on its own side of the body along the cable
+            float sideSign = Vector3.Dot(direction, body.right) >= 0 ? 1 : -1;
             float handT = HandSpacing * s / metersPerT;
             foreach (var hand in new[] { leftHand, rightHand })
             {
-                // Put each hand on its own side of the body along the cable
-                float sign = Vector3.Dot(spline.GetDirection(t), body.right) >= 0 ? 1 : -1;
-                float offset = (hand.isLeft ? -handT : handT) * sign;
+                float offset = (hand.isLeft ? -handT : handT) * sideSign;
                 Vector3 grip = spline.GetPoint(Mathf.Clamp01(t + offset));
+                Vector3 position = grip + (Vector3.down * GripDrop - palmDirection * .03f) * s;
                 hand.followInBodySpace = true;
                 hand.followRate = .5f;
-                hand.Place(grip, Vector3.down, direction);
+                hand.Place(position, -palmDirection, Vector3.up);
             }
         }
     }
