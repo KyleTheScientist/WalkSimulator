@@ -12,7 +12,7 @@ using WalkSimulator.Animators;
 using WalkSimulator.Rigging;
 using WalkSimulator.Tools;
 using WalkSimulatorClassic;
-using Thirpy = Unity.Cinemachine.CinemachineThirdPersonFollow;
+using Thirpy = Unity.Cinemachine.Cinemachine3rdPersonFollow;
 
 namespace WalkSimulator.Menus
 {

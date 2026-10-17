@@ -23,14 +23,11 @@ namespace WalkSimulator.Tools
             Object.Destroy(self);
         }
 
-        // The desktop (third person) camera that the game renders to the monitor
+        // The desktop (third person) camera that the game renders to the monitor.
+        // Found the same way the game's MonitorOutputController finds it.
         public static Camera ShoulderCamera()
         {
-            var thirpy = Object.FindAnyObjectByType<Unity.Cinemachine.CinemachineThirdPersonFollow>();
-            Camera camera = thirpy ? thirpy.GetComponentInParent<Camera>() : null;
-            if (!camera)
-                camera = GorillaTagger.Instance.thirdPersonCamera.GetComponentInChildren<Camera>();
-            return camera;
+            return GorillaTagger.Instance.thirdPersonCamera.GetComponentInChildren<Camera>();
         }
 
         public static float Distance(this Vector3 self, Vector3 other)

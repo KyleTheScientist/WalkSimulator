@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using UnityEngine.InputSystem;
 using UnityEngine;
-using Thirpy = Unity.Cinemachine.CinemachineThirdPersonFollow;
+using Thirpy = Unity.Cinemachine.Cinemachine3rdPersonFollow;
 using GorillaLocomotion;
 
 namespace WalkSimulator.Rigging
@@ -47,8 +47,7 @@ namespace WalkSimulator.Rigging
         }
         void Start()
         {
-            var thirpy = FindAnyObjectByType<Thirpy>();
-            thirpyTarget = thirpy.FollowTarget;
+            thirpyTarget = FindFollowTarget();
             var shoulderCamera = WalkSimulator.Tools.Extensions.ShoulderCamera();
             //cosmeticsTransform = GorillaTagger.Instance.mainCamera.transform.Find("Cosmetics");
 
@@ -64,8 +63,22 @@ namespace WalkSimulator.Rigging
             overrideCam.enabled = false;
         }
 
+        // The transform the shoulder camera follows; tilting it is what makes the monitor view look up/down
+        Transform FindFollowTarget()
+        {
+            var thirpy = FindAnyObjectByType<Thirpy>(FindObjectsInactive.Include);
+            if (thirpy && thirpy.FollowTarget)
+                return thirpy.FollowTarget;
+            var follow = FindAnyObjectByType<GorillaCameraFollow>(FindObjectsInactive.Include);
+            if (follow && follow.cinemachineCamera)
+                return follow.cinemachineCamera.Follow;
+            Logging.Warning("Couldn't find the shoulder camera's follow target; vertical look won't move the monitor view");
+            return null;
+        }
+
         void LateUpdate()
         {
+            if (!cameraObject || !head) return;
             cameraObject.transform.position = GTPlayer.Instance.headCollider.transform.TransformPoint(offset);
             cameraObject.transform.forward = head.forward;
 
@@ -86,7 +99,8 @@ namespace WalkSimulator.Rigging
                 angles.y += 90;
                 //head.localEulerAngles = angles;
                 //Camera.main.transform.localEulerAngles = angles;
-                thirpyTarget.localEulerAngles = new Vector3(angles.x, 0, 0);
+                if (thirpyTarget)
+                    thirpyTarget.localEulerAngles = new Vector3(angles.x, 0, 0);
                 GTPlayer.Instance.headCollider.transform.localEulerAngles = new Vector3(angles.x, 0, 0);
             }
         }
