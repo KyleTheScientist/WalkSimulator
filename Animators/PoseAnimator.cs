@@ -45,6 +45,9 @@ namespace WalkSimulator.Animators
             main.secondary = Mouse.current.forwardButton.isPressed || Keyboard.current.rightBracketKey.isPressed;
         }
 
+        // How far one unit of scroll moves the hand forward/back, and rolls it while rotating
+        const float ScrollReachSpeed = .008f, ScrollRollSpeed = 1.6f;
+
         Vector3 eulerAngles;
         void RotateHand()
         {
@@ -63,19 +66,19 @@ namespace WalkSimulator.Animators
             if (main.isLeft)
             {
                 lookAtLeft = Quaternion.Euler(eulerAngles) * head.forward;
-                zRotationLeft += Mouse.current.scroll.ReadValue().y / 5f;
+                zRotationLeft += Mouse.current.scroll.ReadValue().y * ScrollRollSpeed;
             }
             else
             {
                 lookAtRight = Quaternion.Euler(eulerAngles) * head.forward;
-                zRotationRight += Mouse.current.scroll.ReadValue().y / 5f;
+                zRotationRight += Mouse.current.scroll.ReadValue().y * ScrollRollSpeed;
             }
         }
 
         void PositionHand()
         {
             Vector3 offset = main.isLeft ? offsetLeft : offsetRight;
-            offset.z += Mouse.current.scroll.ReadValue().y / 1000f;
+            offset.z += Mouse.current.scroll.ReadValue().y * ScrollReachSpeed;
             if (Keyboard.current.upArrowKey.wasPressedThisFrame)
                 offset.z += .1f;
             if (Keyboard.current.downArrowKey.wasPressedThisFrame)

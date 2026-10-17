@@ -1,6 +1,10 @@
 ﻿using GorillaLocomotion;
 using GorillaNetworking;
+using HarmonyLib;
+using System;
 using System.Collections;
+using System.Linq;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using WalkSimulator.Rigging;
@@ -52,39 +56,74 @@ namespace WalkSimulator.Animators
         {
             // raycast from the camera position in the direction of the reticle
             var ray = new Ray(Camera.main.transform.position, reticle.position - Camera.main.transform.position);
-            int buttonLayer = LayerMask.GetMask("GorillaInteractable", "TransparentFX");
-            var hits = Physics.RaycastAll(ray, .82f, buttonLayer);
+            // Buttons live on several layers (elevator buttons aren't on GorillaInteractable), and
+            // most are triggers, so check everything and press only the nearest button
+            var hits = Physics.RaycastAll(ray, .82f, ~0, QueryTriggerInteraction.Collide)
+                .OrderBy(hit => hit.distance);
             foreach (var hit in hits)
             {
-                if (hit.transform.GetComponent<GorillaPressableButton>()
+                var pressable = FindPressable(hit.transform);
+                if (pressable.component
                     || hit.transform.GetComponent<GorillaKeyboardButton>()
                     || hit.transform.GetComponent<GorillaPlayerLineButton>()
                     || hit.transform.name.ToLower().Contains("button"))
-                    yield return PressButton(main, hit.point - Camera.main.transform.forward * .05f);
+                {
+                    yield return PressButton(main, hit.point - ray.direction * .03f, pressable);
+                    break;
+                }
             }
             state = State.IDLE;
         }
 
-        IEnumerator PressButton(HandDriver hand, Vector3 targetPosition)
+        // Most buttons can be pressed directly with Click(isLeftHand) (GorillaPressableButton,
+        // GamePressableButton, ...) or ButtonActivationWithHand(isLeftHand). Touching them with the
+        // hand doesn't always register for newer buttons like the elevator's.
+        static readonly string[] pressMethodNames = { "Click", "ButtonActivationWithHand" };
+        static (Component component, MethodInfo method) FindPressable(Transform target)
+        {
+            foreach (var component in target.GetComponentsInParent<MonoBehaviour>())
+            {
+                if (!component) continue;
+                foreach (var name in pressMethodNames)
+                {
+                    var method = AccessTools.Method(component.GetType(), name, new[] { typeof(bool) });
+                    if (method != null)
+                        return (component, method);
+                }
+            }
+            return (null, null);
+        }
+
+        IEnumerator PressButton(HandDriver hand, Vector3 buttonPoint, (Component component, MethodInfo method) pressable)
         {
             state = State.BUTTON;
-            hand.grip = true;
-            hand.targetPosition = reticle.position;
-            hand.lookAt = targetPosition;
+
+            // Press it right away
+            if (pressable.component)
+            {
+                try
+                {
+                    pressable.method.Invoke(pressable.component, new object[] { hand.isLeft });
+                }
+                catch (Exception e) { Logging.Exception(e); }
+            }
+
+            // The rest is for show: a quick pointing tap from the hand's resting spot to the
+            // button and back (the touch also presses buttons that have no click method)
+            Vector3 toButton = buttonPoint - hand.DefaultPosition;
+            hand.grip = true;   // grip without trigger makes a pointing finger
+            hand.followRate = .5f;
+            hand.targetPosition = buttonPoint;
+            hand.lookAt = buttonPoint + toButton;
             hand.up = hand.isLeft ? head.right : -head.right;
-            // move the targetPosition from the reticle position to the button position
-            yield return new WaitForSeconds(.1f);
-
-            hand.targetPosition = targetPosition;
-            while (hand.transform.position.Distance(targetPosition) > .05f)
-                yield return new WaitForFixedUpdate();
-            hand.targetPosition = reticle.position + Camera.main.transform.forward * .05f;
-
-            yield return new WaitForSeconds(.1f);
+            yield return new WaitForSeconds(.12f);
 
             hand.targetPosition = hand.DefaultPosition;
+            yield return new WaitForSeconds(.1f);
+
+            hand.grip = false;
+            hand.followRate = .1f;
             state = State.IDLE;
-            yield break;
         }
 
         void AnimateHands()
