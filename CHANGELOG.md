@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.0.2
+
+- **Fixed a black screen in first person** for players who use the alarm clock. First person and the computer view now look through the game's own camera.
+- **Virtual Stump touchscreens** can be pressed in Interact mode.
+- **Keyboards in Interact mode** no longer register other keys your hand passes over on the way to the one you aimed at.
+- **Look further up and down**, so low buttons close to you are easier to reach in Interact mode.
+- **Fly speed** now changes properly with the scroll wheel, never drops to zero, and is shown in the controls overlay.
+- **Walking away from a computer** while using it now puts you back in your previous mode.
+
 ## 3.0.1
 
 - **VR and desktop switching.** With a VR headset connected you now start in VR mode again, and without one you start walking. Press **V** at any time to switch between VR and desktop controls, or hold **Tab** to pick a desktop mode.
