@@ -1,0 +1,207 @@
+﻿using GorillaLocomotion;
+using UnityEngine;
+using UnityEngine.InputSystem;
+using WalkSimulator.Rigging;
+using WalkSimulator.Tools;
+
+namespace WalkSimulator.Animators
+{
+    public class WalkAnimator : AnimatorBase
+    {
+        float speed = 4f;
+        float height = .4f;
+        float targetHeight;
+
+        public override void Animate()
+        {
+            MoveBody();
+            AnimateHands();
+        }
+
+        bool hasJumped, onJumpCooldown;
+        float jumpTime;
+        void Update()
+        {
+            if (!Plugin.Instance.Enabled) return;
+
+            if (!hasJumped && rig.onGround && Keyboard.current.spaceKey.wasPressedThisFrame)
+            {
+                hasJumped = true;
+                onJumpCooldown = true;
+                jumpTime = Time.time;
+                rig.active = false;
+                rigidbody.AddForce(Vector3.up * 250 * Player.Instance.scale, ForceMode.Impulse);
+            }
+            if (hasJumped && !rig.onGround || Time.time - jumpTime > 1)
+                onJumpCooldown = false;
+            if (rig.onGround && !onJumpCooldown)
+                hasJumped = false;
+        }
+
+        public void MoveBody()
+        {
+            rig.active = rig.onGround && !hasJumped;
+            rig.useGravity = !rig.onGround;
+            if (!rig.onGround) return;
+
+            // Idle animation/bobbing up and down while walking
+            float t, minHeight, maxHeight;
+            if (NotMoving)
+            {
+                minHeight = .5f;
+                maxHeight = .55f;
+                t = Time.time * Mathf.PI * 2;
+            }
+            else
+            {
+                minHeight = .3f;
+                maxHeight = .8f;
+                t = walkCycleTime * Mathf.PI * 2;
+            }
+            if (Keyboard.current.ctrlKey.isPressed)
+            {
+                minHeight -= .3f;
+                maxHeight -= .3f;
+            }
+            targetHeight = Extensions.Map(Mathf.Sin(t), -1, 1, minHeight, maxHeight);
+            height = targetHeight;
+            //targetHeight = .5f;
+            // Smoothly transition to target height otherwise we'll snap to the floor when falling
+            //height = Mathf.Lerp(body.position.Distance(rig.lastGroundPosition), targetHeight, .2f);
+            Vector3 targetPosition = rig.lastGroundPosition + Vector3.up * height * Player.Instance.scale;
+
+            // Handle movement
+            Vector3 direction = body.TransformDirection(InputHandler.inputDirectionNoY);
+            direction.y = 0;
+            if (Vector3.Dot(rig.lastNormal, Vector3.up) > .3f) // If the slope is too steep, don't correct the direction
+                direction = Vector3.ProjectOnPlane(direction, rig.lastNormal);
+            direction *= Player.Instance.scale;
+            float adjSpeed = IsSprinting ? speed * 3f : speed;
+            targetPosition += direction * adjSpeed / 10f;
+            rig.targetPosition = targetPosition;
+        }
+
+        void AnimateHands()
+        {
+            leftHand.lookAt = leftHand.targetPosition + body.forward;
+            rightHand.lookAt = rightHand.targetPosition + body.forward;
+            leftHand.up = body.right;
+            rightHand.up = -body.right;
+            if (!rig.onGround)
+            {
+                leftHand.grounded = false;
+                rightHand.grounded = false;
+                //leftHand.lastSnap = leftHand.DefaultPosition;
+                //rightHand.lastSnap = rightHand.DefaultPosition;
+                //leftHand.hit = leftHand.DefaultPosition;
+                //rightHand.hit = rightHand.DefaultPosition;
+                Vector3 offset = Vector3.up * .2f * Player.Instance.scale;
+                leftHand.targetPosition = leftHand.DefaultPosition;
+                rightHand.targetPosition = rightHand.DefaultPosition + offset;
+                return;
+            }
+
+            UpdateHitInfo(leftHand);
+            UpdateHitInfo(rightHand);
+
+            if (NotMoving)
+            {
+                leftHand.targetPosition = leftHand.hit;
+                rightHand.targetPosition = rightHand.hit;
+                return;
+            }
+
+            if (!leftHand.grounded && !rightHand.grounded)
+            {
+                leftHand.grounded = true;
+                leftHand.lastSnap = leftHand.hit;
+                leftHand.targetPosition = leftHand.hit;
+                rightHand.lastSnap = rightHand.hit;
+                rightHand.targetPosition = rightHand.hit;
+            }
+            AnimateHand(leftHand, rightHand);
+            AnimateHand(rightHand, leftHand);
+        }
+
+        void UpdateHitInfo(HandDriver hand)
+        {
+            float scale = Player.Instance.scale;
+            float raycastLength = .5f * scale;
+            var groundPos = rig.smoothedGroundPosition;
+            var groundNormal = rig.lastNormal;
+
+            float forwardness = Mathf.Abs(Vector3.Dot(InputHandler.inputDirectionNoY, Vector3.forward));
+            float adjOriginDistance = Extensions.Map(forwardness, 0, 1, .4f, .5f);
+            var directionOffset = body.TransformDirection(InputHandler.inputDirectionNoY * adjOriginDistance);
+            directionOffset.y = 0;
+            directionOffset *= scale;
+            Vector3 origin = Vector3.ProjectOnPlane(hand.DefaultPosition - groundPos + directionOffset, groundNormal);
+            origin += groundPos + (groundNormal * .3f * scale);
+            //DebugPoint.Get(hand.name + "raycast origin", Color.cyan).position = origin;
+            //DebugPoint.Get(hand.name + "raycast end", Color.yellow).position = origin + -groundNormal * raycastLength;
+
+            RaycastHit hit;
+            if (!Physics.Raycast(origin, -groundNormal, out hit, raycastLength, Player.Instance.locomotionEnabledLayers))
+            {
+                if (NotMoving)
+                    hand.targetPosition = hand.DefaultPosition;
+                return;
+            }
+            hand.hit = hit.point;
+            hand.normal = hit.normal;
+            hand.lookAt = hand.transform.position + body.forward;
+        }
+
+        float walkCycleTime = 0;
+        void AnimateHand(HandDriver hand, HandDriver otherHand)
+        {
+            float forwardness = Mathf.Abs(Vector3.Dot(InputHandler.inputDirectionNoY, Vector3.forward));
+            float flatness = Vector3.Dot(rig.lastNormal, Vector3.up);
+            float snapDistance = Extensions.Map(flatness, 0, 1, .1f, .6f);
+            float adjSnapDistance = Extensions.Map(forwardness, 0, 1, .5f, 1.25f);
+            adjSnapDistance *= snapDistance * Player.Instance.scale;
+            float stepHeight = .2f * Player.Instance.scale;
+
+            float otherStretch = otherHand.hit.Distance(otherHand.lastSnap) / adjSnapDistance;
+            if (otherHand.grounded && otherStretch >= 1)
+            {
+                hand.targetPosition = hand.hit;
+                hand.lastSnap = hand.hit;
+                hand.grounded = true;
+                otherHand.grounded = false;
+            }
+            else if (otherHand.grounded)
+            {
+                walkCycleTime = otherStretch;
+                hand.targetPosition = Vector3.Slerp(hand.lastSnap, hand.hit, walkCycleTime);
+                hand.targetPosition += hand.normal * stepHeight * Mathf.Sin(walkCycleTime);
+                //hand.targetPosition = hand.lastSnap;
+                hand.grounded = false;
+            }
+
+            if (hand.targetPosition.Distance(hand.DefaultPosition) > 1f)
+            {
+                hand.targetPosition = hand.DefaultPosition;
+            }
+            //hand.followRate = hand.grounded ? .2f : .1f;
+            //DebugPoint.Get($"{hand.name} hit", hand.isLeft ? Color.blue : Color.green).position = hand.hit;
+            //DebugPoint.Get($"{hand.name} snap", hand.isLeft ? Color.cyan : Color.magenta).position = hand.lastSnap;
+        }
+
+        public override void Setup()
+        {
+            HeadDriver.Instance.LockCursor = true;
+            HeadDriver.Instance.turn = true;
+        }
+
+        bool IsSprinting
+        {
+            get { return Keyboard.current.leftShiftKey.isPressed; }
+        }
+
+        bool NotMoving
+        {
+            get { return InputHandler.inputDirectionNoY == Vector3.zero; }
+        }
+    }
+}
