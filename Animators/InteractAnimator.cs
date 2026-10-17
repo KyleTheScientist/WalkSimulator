@@ -252,7 +252,7 @@ namespace WalkSimulator.Animators
             Transform tip = IndexFingertip(hand.isLeft);
             for (float end = Time.time + .12f; Time.time < end; )
             {
-                Vector3 reach = tip ? tip.position - hand.transform.position
+                Vector3 reach = tip ? FingertipPosition(tip) - hand.transform.position
                                     : toButton.normalized * FallbackFingerReach * GTPlayer.Instance.scale;
                 hand.targetPosition = buttonPoint - reach;
                 yield return null;
@@ -270,6 +270,14 @@ namespace WalkSimulator.Animators
         // How far the fingertip is from the hand if the finger bones can't be found
         const float FallbackFingerReach = .1f;
         readonly Transform[] fingertips = new Transform[2];
+
+        // The last index bone is the joint at the start of the fingertip segment; the visible tip is
+        // about one more segment further along the finger
+        static Vector3 FingertipPosition(Transform lastJoint)
+        {
+            var parent = lastJoint.parent;
+            return parent ? lastJoint.position + (lastJoint.position - parent.position) : lastJoint.position;
+        }
 
         // The farthest index finger bone on the player's hand model
         Transform IndexFingertip(bool left)
