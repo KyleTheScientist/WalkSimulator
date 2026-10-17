@@ -30,6 +30,14 @@ namespace WalkSimulator.Tools
             return GorillaTagger.Instance.thirdPersonCamera.GetComponentInChildren<Camera>();
         }
 
+        // Converts a "lerp this much per tick" rate, tuned at 90 ticks/sec, into the equivalent for
+        // the current tick length, so smoothing looks the same at any physics rate
+        // (the game runs physics at the headset refresh rate, or 144Hz without one)
+        public static float Smoothing(float ratePerTickAt90Hz)
+        {
+            return 1 - Mathf.Pow(1 - Mathf.Clamp01(ratePerTickAt90Hz), Time.deltaTime * 90f);
+        }
+
         public static string GetPath(this Transform self)
         {
             string path = self.name;

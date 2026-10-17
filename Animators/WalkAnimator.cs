@@ -44,30 +44,26 @@ namespace WalkSimulator.Animators
             rig.useGravity = !rig.onGround;
             if (!rig.onGround) return;
 
-            // Idle animation/bobbing up and down while walking
-            float t, minHeight, maxHeight;
+            // Idle breathing, or bobbing up and down while walking
+            float baseHeight, bob, t;
             if (NotMoving)
             {
-                minHeight = .5f;
-                maxHeight = .55f;
-                t = Time.time * Mathf.PI * 2;
+                baseHeight = .5f;
+                bob = .03f;
+                t = Mathf.Sin(Time.time * Mathf.PI * 2) * .5f + .5f;
             }
             else
             {
-                minHeight = .3f;
-                maxHeight = .8f;
-                t = walkCycleTime * Mathf.PI * 2;
+                baseHeight = .52f;
+                bob = .06f;
+                // Lowest when a hand plants, highest mid-swing (one bob per step)
+                t = Mathf.Sin(walkCycleTime * Mathf.PI);
             }
             if (Keyboard.current.ctrlKey.isPressed)
-            {
-                minHeight -= .3f;
-                maxHeight -= .3f;
-            }
-            targetHeight = Extensions.Map(Mathf.Sin(t), -1, 1, minHeight, maxHeight);
-            height = targetHeight;
-            //targetHeight = .5f;
-            // Smoothly transition to target height otherwise we'll snap to the floor when falling
-            //height = Mathf.Lerp(body.position.Distance(rig.lastGroundPosition), targetHeight, .2f);
+                baseHeight -= .3f;
+            targetHeight = baseHeight + bob * t;
+            // Ease toward the target so the body doesn't snap between heights
+            height = Mathf.Lerp(height, targetHeight, Extensions.Smoothing(.2f));
             Vector3 targetPosition = rig.lastGroundPosition + Vector3.up * height * GTPlayer.Instance.scale;
 
             // Handle movement
@@ -172,9 +168,11 @@ namespace WalkSimulator.Animators
             }
             else if (otherHand.grounded)
             {
-                walkCycleTime = otherStretch;
-                hand.targetPosition = Vector3.Slerp(hand.lastSnap, hand.hit, walkCycleTime);
-                hand.targetPosition += hand.normal * stepHeight * Mathf.Sin(walkCycleTime);
+                walkCycleTime = Mathf.Clamp01(otherStretch);
+                // Lerp, not Slerp: these are points, and Slerp would arc them around the world origin
+                hand.targetPosition = Vector3.Lerp(hand.lastSnap, hand.hit, walkCycleTime);
+                // Lift peaks mid-swing and is back on the ground when the hand plants
+                hand.targetPosition += hand.normal * stepHeight * Mathf.Sin(walkCycleTime * Mathf.PI);
                 //hand.targetPosition = hand.lastSnap;
                 hand.grounded = false;
             }

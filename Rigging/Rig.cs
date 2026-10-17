@@ -77,7 +77,7 @@ namespace WalkSimulator.Rigging
         void FixedUpdate()
         {
             scale = GTPlayer.Instance.scale;
-            smoothedGroundPosition = Vector3.Lerp(smoothedGroundPosition, lastGroundPosition, .2f);
+            smoothedGroundPosition = Vector3.Lerp(smoothedGroundPosition, lastGroundPosition, Tools.Extensions.Smoothing(.2f));
             //acceleration = Plugin.Instance.sliders["acceleration"] / 10f;
 
             OnGroundRaycast();

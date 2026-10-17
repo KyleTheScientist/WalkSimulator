@@ -46,7 +46,7 @@ namespace WalkSimulator.Rigging
 
         void FixedUpdate()
         {
-            transform.position = Vector3.Lerp(transform.position, targetPosition, followRate);
+            transform.position = Vector3.Lerp(transform.position, targetPosition, Extensions.Smoothing(followRate));
             transform.LookAt(lookAt, up);
             if(hideControllerTransform)
                 controller.position = body.position;
