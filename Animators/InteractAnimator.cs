@@ -312,14 +312,21 @@ namespace WalkSimulator.Animators
                 disabledTouch.Clear();
                 return;
             }
+            // Buttons react to any collider under a GorillaTriggerColliderHandIndicator, and the
+            // player has several (hand triggers, fingers...), so switch off all of the local player's,
+            // for both hands: the resting hand shouldn't press anything during the tap either
             var tagger = GorillaTagger.Instance;
-            var touch = left ? tagger.leftHandTriggerCollider : tagger.rightHandTriggerCollider;
-            if (!touch) return;
-            foreach (var collider in touch.GetComponentsInChildren<Collider>())
+            Transform player = tagger.transform, rig = tagger.offlineVRRig.transform, body = GTPlayer.Instance.transform;
+            foreach (var indicator in FindObjectsByType<GorillaTriggerColliderHandIndicator>(FindObjectsSortMode.None))
             {
-                if (!collider.enabled) continue;
-                collider.enabled = false;
-                disabledTouch.Add(collider);
+                var t = indicator.transform;
+                if (!t.IsChildOf(player) && !t.IsChildOf(rig) && !t.IsChildOf(body)) continue;
+                foreach (var collider in indicator.GetComponentsInChildren<Collider>())
+                {
+                    if (!collider.enabled) continue;
+                    collider.enabled = false;
+                    disabledTouch.Add(collider);
+                }
             }
         }
 
