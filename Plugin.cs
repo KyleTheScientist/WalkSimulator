@@ -5,6 +5,7 @@ using HarmonyLib;
 using Photon.Pun;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using Utilla;
 using Utilla.Attributes;
@@ -139,6 +140,9 @@ namespace WalkSimulator
         }
 
         bool setGamemode = false;
+        float nextGamemodeAttempt;
+        Type selectorType;
+        MethodInfo nextPage;
         void FixedUpdate()
         {
             TryInitializeGamemode();
@@ -146,12 +150,25 @@ namespace WalkSimulator
 
         public void TryInitializeGamemode()
         {
-            if (setGamemode) return;
+            if (setGamemode || Time.time < nextGamemodeAttempt) return;
+            nextGamemodeAttempt = Time.time + 1f;
             try
             {
-                // Utilla's selector is internal, so go through reflection
-                var selectorType = AccessTools.TypeByName("Utilla.Behaviours.UtillaGamemodeSelector");
-                AccessTools.Method(selectorType, "NextPage").Invoke(FindAnyObjectByType(selectorType), null);
+                // Utilla's selector is internal, so go through reflection (looked up once; it's slow)
+                if (selectorType == null)
+                {
+                    selectorType = AccessTools.TypeByName("Utilla.Behaviours.UtillaGamemodeSelector");
+                    if (selectorType == null)
+                    {
+                        Logging.Warning("Utilla gamemode selector not found; not auto-selecting modded casual");
+                        setGamemode = true;
+                        return;
+                    }
+                    nextPage = AccessTools.Method(selectorType, "NextPage");
+                }
+                var selector = FindAnyObjectByType(selectorType);
+                if (!selector) return;
+                nextPage.Invoke(selector, null);
                 foreach (var btn in FindObjectsByType<ModeSelectButton>(FindObjectsSortMode.None))
                 {
                     if (btn.gameMode.ToUpper().Contains("MODDED_CASUAL"))
