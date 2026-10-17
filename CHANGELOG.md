@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.1
+
+- **VR and desktop switching.** With a VR headset connected you now start in VR mode again, and without one you start walking. Press **V** at any time to switch between VR and desktop controls, or hold **Tab** to pick a desktop mode.
+- **Fixed:** switching back to VR now gives your hands back to your controllers and releases any buttons the mod was holding.
+
 ## 3.0.0
 
 WalkSimulator is back for the current version of Gorilla Tag, with a rebuilt walk and a lot of new ways to get around.
@@ -28,7 +33,7 @@ WalkSimulator is back for the current version of Gorilla Tag, with a rebuilt wal
 
 ### Improved
 
-- **VR and desktop switching.** Without a headset you start walking right away, so you no longer need to pick walk from the Tab menu first. With a headset you start in VR mode as before. Press **V** at any time to switch between VR and desktop controls.
+- **Start walking right away.** Walk mode is selected as soon as the game loads, so you no longer need to pick it from the Tab menu first.
 - **Sprint while flying** by holding **Shift**.
 - **Stop emotes** by moving or pressing the same number again.
 - **Interact mode** presses buttons instantly, including elevator buttons, and only presses the one you're aiming at. The hand tap is just for show.
@@ -44,4 +49,3 @@ WalkSimulator is back for the current version of Gorilla Tag, with a rebuilt wal
 - Entering zones like the city no longer drops you into a public lobby when a modded mode is selected.
 - Jumping no longer stops working after joining or leaving a room.
 - Leaving noclip in fly mode no longer leaves your body passing through things.
-- Switching back to VR now gives your hands back to your controllers and releases any buttons the mod was holding.
