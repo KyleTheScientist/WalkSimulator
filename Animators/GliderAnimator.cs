@@ -22,9 +22,12 @@ namespace WalkSimulator.Animators
         const float GrabTimeout = 1.5f;         // give up if the game hasn't picked it up by then
         const float OnHandleDistance = .1f;     // a hand this close to its spot on the handle can squeeze
         const float SqueezePeriod = .2f;        // re-squeeze this often until the game picks it up
+        const float SecondHandTimeout = 1f;     // keep trying to get the second hand on for this long
         const float HandSpread = .3f;           // each hand this far to the side while flying
         const float HandHeight = .35f;          // hands this far above the head while flying
-        const float HandForward = .15f;         // and this far in front
+        // How far in front of the head the hands sit with W/S released. The glider pitches from where
+        // your head is relative to the handle; hands further forward tipped the nose down
+        const float HandForward = 0f;
         const float RollHeight = .15f;          // A/D raises one hand and lowers the other this much
         const float PitchReach = .2f;           // W/S moves the hands this far forward/back
         const float RegrabDelay = .5f;
@@ -36,7 +39,7 @@ namespace WalkSimulator.Animators
 
         public AnimatorBase returnTo;
         GliderHoldable glider;
-        float grabStart, jumpTime = -100;
+        float grabStart, firstHeldTime, jumpTime = -100;
         bool wasHeld;
 
         // The rig counts as grounded with ground ~1.3m below, so ignore that right after a jump
@@ -49,6 +52,13 @@ namespace WalkSimulator.Animators
 
         static float Scale => GTPlayer.Instance.scale;
         static bool GrabHeld => Mouse.current.leftButton.isPressed || Mouse.current.rightButton.isPressed;
+
+        bool HoldsWith(HandDriver hand)
+        {
+            var interactor = EquipmentInteractor.instance;
+            if (!interactor || !glider) return false;
+            return ReferenceEquals(hand.isLeft ? interactor.leftHandHeldEquipment : interactor.rightHandHeldEquipment, glider);
+        }
 
         bool IsHeld
         {
@@ -145,7 +155,10 @@ namespace WalkSimulator.Animators
             float s = Scale;
             bool held = IsHeld;
             if (held && !wasHeld)
+            {
                 Logging.Info("Grabbed glider");
+                firstHeldTime = Time.time;
+            }
             if (!held && wasHeld)
             {
                 // The game let go of it (respawned, taken by someone, ...)
@@ -160,19 +173,20 @@ namespace WalkSimulator.Animators
                 hand.hideControllerTransform = false;
                 hand.followInBodySpace = true;
                 hand.followRate = .5f;
-                if (held)
-                    hand.grip = true;
             }
 
-            if (!held)
+            if (!held && Time.time - grabStart > GrabTimeout)
             {
-                // Reach for the handle and squeeze until the game picks it up
-                if (Time.time - grabStart > GrabTimeout)
-                {
-                    Logging.Info("Couldn't grab the glider");
-                    Leave();
-                    return;
-                }
+                Logging.Info("Couldn't grab the glider");
+                Leave();
+                return;
+            }
+
+            // Get both hands on it (the glider flies two-handed); a hand that's already holding grips
+            // with its whole hand, the other keeps reaching and squeezing
+            bool bothHolding = HoldsWith(leftHand) && HoldsWith(rightHand);
+            if (!held || (!bothHolding && Time.time - firstHeldTime < SecondHandTimeout))
+            {
                 var handle = handleRef(glider);
                 Transform handleTransform = handle ? handle.transform : glider.transform;
                 // The game only grabs at the moment grip is pressed with the hand on the handle, so keep
@@ -183,11 +197,21 @@ namespace WalkSimulator.Animators
                     float side = hand.isLeft ? -1 : 1;
                     Vector3 point = handleTransform.position + handleTransform.right * side * HandSpread * .5f * s;
                     hand.Place(point, -body.forward, Vector3.up);
-                    bool onHandle = hand.transform.position.Distance(point) < OnHandleDistance * s;
-                    hand.grip = onHandle && squeezePhase;
+                    if (HoldsWith(hand))
+                        hand.grip = hand.trigger = true;
+                    else
+                    {
+                        bool onHandle = hand.transform.position.Distance(point) < OnHandleDistance * s;
+                        hand.grip = onHandle && squeezePhase;
+                        hand.trigger = false;
+                    }
                 }
                 return;
             }
+
+            // Full grip with every hand that's holding it
+            foreach (var hand in new[] { leftHand, rightHand })
+                hand.grip = hand.trigger = HoldsWith(hand);
 
             Vector3 input = InputHandler.inputDirection;
             if (OnGround)
