@@ -136,8 +136,8 @@ namespace WalkSimulator.Animators
             }
         }
 
-        // Hold the mouse button and move the mouse left/right to slide it; the camera stops turning
-        // while dragging, and the hand follows the knob
+        // Hold the mouse button and move the mouse up/down to slide it (the game's sliders are
+        // vertical); the camera stops turning while dragging, and the hand follows the knob
         IEnumerator DragSlider(HandDriver hand, SliderHandle slider)
         {
             state = State.SLIDER;
@@ -150,14 +150,14 @@ namespace WalkSimulator.Animators
             try
             {
                 progress = slider.Get();
-                // Moving the mouse right should move the knob to the right on screen
-                direction = Vector3.Dot(slider.Axis(), Camera.main.transform.right) >= 0 ? 1 : -1;
+                // Moving the mouse up should move the knob up on screen
+                direction = Vector3.Dot(slider.Axis(), Camera.main.transform.up) >= 0 ? 1 : -1;
             }
             catch (Exception e) { Logging.Exception(e); }
 
             while (button.isPressed && slider.component)
             {
-                progress = Mathf.Clamp01(progress + Mouse.current.delta.value.x * SliderSensitivity * direction);
+                progress = Mathf.Clamp01(progress + Mouse.current.delta.value.y * SliderSensitivity * direction);
                 try { slider.Set(progress); }
                 catch (Exception e) { Logging.Exception(e); break; }
 

@@ -125,7 +125,7 @@ namespace WalkSimulator.Menus
             {
                 lines.Add(("Interact", ""));
                 lines.Add(("Left / right click", "Press a button with left / right hand"));
-                lines.Add(("Hold click + mouse", "Drag a slider"));
+                lines.Add(("Hold click + mouse", "Drag a slider up / down"));
             }
 
             lines.Add(("", ""));
