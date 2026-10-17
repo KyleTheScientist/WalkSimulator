@@ -35,12 +35,16 @@ namespace WalkSimulator.Rigging
         // Sliding on slippery ground while walking
         public bool sliding;
         public Vector3 slideVelocity;
+        float slideEndTime = -100;
+        // After a slide ends, keep ignoring edge-only ground for this long so the lip doesn't catch you
+        const float SlideEdgeGrace = .3f;
 
         // Slip below which ground counts as normal
         const float SlipThreshold = .1f;
         // Below your normal walk/sprint speed, holding a direction pushes you up to it (like
         // skating off); faster than that, it only steers
         const float PushOffAcceleration = 10f;
+        const float MinPushOffFlatness = .99f;  // cos of ~8 degrees
         // Fallback if the game's value can't be read
         const float DefaultBaseSlideControl = .00425f;
         // Just a safety cap; the game itself doesn't cap slide speed (its slideVelocityLimit only
@@ -156,7 +160,9 @@ namespace WalkSimulator.Rigging
                 // Matches the walk's speed: Rig moves 4x the target offset per second, and the walk
                 // offsets the target by speed / 10 (4, or 12 sprinting)
                 float pushOffSpeed = (Keyboard.current.leftShiftKey.isPressed ? 12f : 4f) * .4f * scale;
-                if (speed < pushOffSpeed)
+                // Only on nearly flat ice, or you could skate up any slope forever
+                bool flat = Vector3.Dot(lastNormal, Vector3.up) > MinPushOffFlatness;
+                if (speed < pushOffSpeed && flat)
                     slideVelocity += steer * Mathf.Min(PushOffAcceleration * scale * dt, pushOffSpeed - speed);
                 else
                 {
@@ -183,6 +189,8 @@ namespace WalkSimulator.Rigging
         {
             if (value == sliding) return;
             sliding = value;
+            if (!value)
+                slideEndTime = Time.time;
             if (value)
                 Logging.Info($"Sliding (slipperiness {slipperiness:0.00})");
             try { GTPlayer.Instance.IsBodySliding = value; }
@@ -215,6 +223,14 @@ namespace WalkSimulator.Rigging
                 // choose the hit with the closest y value to the forecasted y
                 hit = Mathf.Abs(lineHit.point.y - y) < Mathf.Abs(sphereHit.point.y - y) ?
                     lineHit : sphereHit;
+            }
+            else if (didSphereHit && (sliding || Time.time - slideEndTime < SlideEdgeGrace))
+            {
+                // Sliding off an edge: the sphere still catches the lip behind you, and its normal
+                // faces back at you, which would strip your momentum. Only ground directly below counts.
+                onGround = false;
+                slipperiness = 0;
+                return;
             }
             else if (didSphereHit)
                 hit = sphereHit;

@@ -228,14 +228,16 @@ namespace WalkSimulator.Animators
         }
 
         // Steer toward the held direction in the air (this is what brings you back to a wall
-        // between bounces). Only pushes while a direction is held, so momentum carries otherwise.
+        // between bounces). Holding a direction can turn you or slow you down, and speeds you up
+        // to walking speed, but never cuts momentum you already have (off a ramp, zipline, rope...).
         void AirControl()
         {
             Vector3 direction = InputDirection;
             if (direction == Vector3.zero) return;
             Vector3 horizontal = Vector3.ProjectOnPlane(rigidbody.linearVelocity, Vector3.up);
-            Vector3 change = Vector3.ClampMagnitude(direction * GroundSpeed - horizontal, AirAcceleration * Scale * Time.deltaTime);
-            rigidbody.AddForce(change, ForceMode.VelocityChange);
+            Vector3 next = horizontal + direction * AirAcceleration * Scale * Time.deltaTime;
+            next = Vector3.ClampMagnitude(next, Mathf.Max(horizontal.magnitude, GroundSpeed));
+            rigidbody.AddForce(next - horizontal, ForceMode.VelocityChange);
         }
         #endregion
 

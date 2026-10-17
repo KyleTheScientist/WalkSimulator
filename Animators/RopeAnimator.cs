@@ -25,12 +25,15 @@ namespace WalkSimulator.Animators
         const float ReleaseBoost = 1.2f;        // multiplier on the rope's velocity when letting go
         const float JumpOffMultiplier = 1.3f;   // Space launches you this much harder than a normal jump
         const float RegrabDelay = .4f;          // seconds before you can grab again after letting go
+        const float HandGap = .16f;             // the upper hand grips this far up the rope from the lower
+        const float MaxTrustedSpeed = 15f;      // rope speed readings above this are glitches
 
         public AnimatorBase returnTo;
         GorillaRopeSwing rope;
         int boneIndex;
         int upStep;                             // which way along the bones is up the rope (-1 or 1)
         Vector3 lastBonePosition, boneVelocity;
+        float lastBoneMoveTime;
         bool attached;
 
         static GorillaRopeSwing[] ropes = new GorillaRopeSwing[0];
@@ -92,6 +95,7 @@ namespace WalkSimulator.Animators
             HeadDriver.Instance.turn = true;
             if (!rope) return;
             lastBonePosition = BoneTransform.position;
+            lastBoneMoveTime = Time.time;
             boneVelocity = Vector3.zero;
             try
             {
@@ -132,9 +136,32 @@ namespace WalkSimulator.Animators
         {
             if (!Plugin.Instance.Enabled || rig == null) return;
             if (!rope || !rope.isActiveAndEnabled || !GrabHeld)
+            {
                 Release();
-            else if (Keyboard.current.spaceKey.wasPressedThisFrame)
+                return;
+            }
+            if (Keyboard.current.spaceKey.wasPressedThisFrame)
+            {
                 Release(jump: true);
+                return;
+            }
+            TrackBoneVelocity();
+        }
+
+        // The rope simulation moves its bones on frames, not physics ticks, so measuring per tick
+        // reads zero on some ticks and double on others. Measure only when the bone actually moved,
+        // over the real time since it last moved, smoothed, and ignore glitchy spikes. (Writing a bad
+        // reading back into the rope is what caused occasional hard kicks.)
+        void TrackBoneVelocity()
+        {
+            Vector3 position = BoneTransform.position;
+            float elapsed = Time.time - lastBoneMoveTime;
+            if (position == lastBonePosition || elapsed <= 0) return;
+            Vector3 measured = (position - lastBonePosition) / elapsed;
+            lastBonePosition = position;
+            lastBoneMoveTime = Time.time;
+            if (measured.magnitude > MaxTrustedSpeed * Scale) return;
+            boneVelocity = Vector3.Lerp(boneVelocity, measured, .4f);
         }
 
         public override void Animate()
@@ -144,10 +171,7 @@ namespace WalkSimulator.Animators
             float s = Scale;
             Vector3 input = InputHandler.inputDirection;
 
-            // Track how the grabbed point is moving
             Vector3 bonePosition = BoneTransform.position;
-            boneVelocity = (bonePosition - lastBonePosition) / Mathf.Max(dt, .0001f);
-            lastBonePosition = bonePosition;
 
             // Pump the swing in the held direction, up to a speed limit
             Vector3 push = body.TransformDirection(new Vector3(input.x, 0, input.z));
@@ -166,11 +190,13 @@ namespace WalkSimulator.Animators
             rig.active = false;
             rigidbody.linearVelocity = boneVelocity + (hang - body.position) * 10f;
 
-            // Right hand on the grabbed bone, left hand one bone higher; knuckles facing out
+            // Right hand on the grabbed bone, left hand a hand's width higher; knuckles facing out.
+            // (Bones can be far apart, so measure the gap along the rope instead of using the next bone.)
             int upperBone = Mathf.Clamp(Bone + upStep, 0, rope.nodes.Length - 1);
             Vector3 ropeUp = (rope.nodes[upperBone].position - bonePosition);
             if (ropeUp.sqrMagnitude < .0001f) ropeUp = Vector3.up;
-            Vector3 lower = bonePosition, upper = Bone == upperBone ? bonePosition + ropeUp.normalized * .12f * s : rope.nodes[upperBone].position;
+            ropeUp.Normalize();
+            Vector3 lower = bonePosition, upper = bonePosition + ropeUp * HandGap * s;
             foreach (var hand in new[] { leftHand, rightHand })
             {
                 Vector3 grip = hand.isLeft ? upper : lower;
