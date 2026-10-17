@@ -60,11 +60,10 @@ namespace WalkSimulator
                             ).AddComponent<RadialMenu>();
                     }
                     computerGUI = this.gameObject.GetOrAddComponent<ComputerGUI>();
-                    walkAnimator.enabled = false;
-                    flyAnimator.enabled = false;
-                    emoteAnimator.enabled = false;
-                    handAnimator.enabled = false;
-                    grabAnimator.enabled = false;
+                    // This runs again on every modded room join/leave, so leave the animator
+                    // that's in use running (its Update handles things like jumping)
+                    foreach (var animator in new[] { walkAnimator, flyAnimator, emoteAnimator, handAnimator, grabAnimator })
+                        animator.enabled = animator == Rig.Instance.Animator;
                     StartCoroutine(SelectDefaultAnimator());
                 }
                 else

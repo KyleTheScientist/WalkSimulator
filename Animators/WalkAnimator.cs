@@ -49,13 +49,13 @@ namespace WalkSimulator.Animators
             if (NotMoving)
             {
                 baseHeight = .5f;
-                bob = .03f;
+                bob = .04f;
                 t = Mathf.Sin(Time.time * Mathf.PI * 2) * .5f + .5f;
             }
             else
             {
-                baseHeight = .52f;
-                bob = .06f;
+                baseHeight = .46f;
+                bob = IsSprinting ? .22f : .16f;
                 // Lowest when a hand plants, highest mid-swing (one bob per step)
                 t = Mathf.Sin(walkCycleTime * Mathf.PI);
             }
@@ -63,7 +63,7 @@ namespace WalkSimulator.Animators
                 baseHeight -= .3f;
             targetHeight = baseHeight + bob * t;
             // Ease toward the target so the body doesn't snap between heights
-            height = Mathf.Lerp(height, targetHeight, Extensions.Smoothing(.2f));
+            height = Mathf.Lerp(height, targetHeight, Extensions.Smoothing(.3f));
             Vector3 targetPosition = rig.lastGroundPosition + Vector3.up * height * GTPlayer.Instance.scale;
 
             // Handle movement
@@ -79,6 +79,8 @@ namespace WalkSimulator.Animators
 
         void AnimateHands()
         {
+            // Hands have to cover more ground per step when sprinting, so let them catch up faster
+            leftHand.followRate = rightHand.followRate = IsSprinting ? .35f : .1f;
             leftHand.lookAt = leftHand.targetPosition + body.forward;
             rightHand.lookAt = rightHand.targetPosition + body.forward;
             leftHand.up = body.right;
@@ -184,6 +186,12 @@ namespace WalkSimulator.Animators
             //hand.followRate = hand.grounded ? .2f : .1f;
             //DebugPoint.Get($"{hand.name} hit", hand.isLeft ? Color.blue : Color.green).position = hand.hit;
             //DebugPoint.Get($"{hand.name} snap", hand.isLeft ? Color.cyan : Color.magenta).position = hand.lastSnap;
+        }
+
+        public override void Cleanup()
+        {
+            base.Cleanup();
+            leftHand.followRate = rightHand.followRate = .1f;
         }
 
         public override void Setup()
