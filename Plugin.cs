@@ -32,7 +32,7 @@ namespace WalkSimulator
             emoteAnimator, 
             handAnimator,
             grabAnimator;
-        public static ConfigEntry<bool> ClassicWalk;
+        public static ConfigEntry<bool> ClassicWalk, ShowControls;
 
         // Whichever walk style is selected
         public AnimatorBase walkAnimator => ClassicWalk.Value ? classicWalkAnimator : proceduralWalkAnimator;
@@ -48,6 +48,7 @@ namespace WalkSimulator
                 Rig.Instance.Animator = walkAnimator;
         }
         public ComputerGUI computerGUI;
+        public ControlsOverlay controlsOverlay;
         public AssetBundle bundle;
         public RadialMenu radialMenu;
 
@@ -77,6 +78,7 @@ namespace WalkSimulator
                             ).AddComponent<RadialMenu>();
                     }
                     computerGUI = this.gameObject.GetOrAddComponent<ComputerGUI>();
+                    controlsOverlay = this.gameObject.GetOrAddComponent<ControlsOverlay>();
                     // This runs again on every modded room join/leave, so leave the animator
                     // that's in use running (its Update handles things like jumping)
                     foreach (var animator in new[] { proceduralWalkAnimator, classicWalkAnimator, flyAnimator, emoteAnimator, handAnimator, grabAnimator })
@@ -94,6 +96,7 @@ namespace WalkSimulator
                     handAnimator?.Obliterate();
                     grabAnimator?.Obliterate();
                     computerGUI?.Obliterate();
+                    controlsOverlay?.Obliterate();
                 }
             }
         }
@@ -114,6 +117,8 @@ namespace WalkSimulator
             Logging.Init();
             ClassicWalk = Config.Bind("Animation", "Classic Walk", false,
                 "Use the original walk animation instead of the procedural one. Toggle in game with F6.");
+            ShowControls = Config.Bind("Interface", "Show Controls", true,
+                "Show the controls for the current mode in the corner of the screen. Toggle in game with H.");
 
             // open the file at BepInEx/config/BepInEx.cfg and replace the value of the setting
             // HideManagerGameObject with "true" using regex. 

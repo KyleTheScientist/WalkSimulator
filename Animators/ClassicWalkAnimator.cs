@@ -83,6 +83,8 @@ namespace WalkSimulator.Animators
 
         void AnimateHands()
         {
+            // In the air, smooth relative to the body so arms don't trail behind a fast fall
+            leftHand.followInBodySpace = rightHand.followInBodySpace = !rig.onGround;
             // Hands have to cover more ground per step when sprinting, so let them catch up faster
             leftHand.followRate = rightHand.followRate = IsSprinting ? .35f : .1f;
             leftHand.lookAt = leftHand.targetPosition + body.forward;

@@ -391,6 +391,7 @@ namespace WalkSimulator.Animators
         void Pose(Limb limb)
         {
             var hand = limb.driver;
+            hand.followInBodySpace = false;
             hand.hideControllerTransform = true;
             Vector3 position, normal;
             float curl = 0;
@@ -419,19 +420,8 @@ namespace WalkSimulator.Animators
             Orient(limb, position, normal, body.forward, curl);
         }
 
-        // Places the hand flat against a surface with its knuckles pointing along forwardHint,
-        // curled forward by curl degrees
-        void Orient(Limb limb, Vector3 position, Vector3 normal, Vector3 forwardHint, float curl)
-        {
-            var hand = limb.driver;
-            hand.targetPosition = position;
-            Vector3 forward = Vector3.ProjectOnPlane(forwardHint, normal).normalized;
-            if (forward == Vector3.zero) forward = body.forward;
-            Vector3 right = Vector3.Cross(normal, forward);
-            forward = Quaternion.AngleAxis(curl, right) * forward;
-            hand.lookAt = position + forward;
-            hand.up = limb == left ? right : -right;
-        }
+        void Orient(Limb limb, Vector3 position, Vector3 normal, Vector3 forwardHint, float curl) =>
+            limb.driver.Place(position, normal, forwardHint, curl);
 
         // In the air: a hand that just slapped a wall stays on it briefly; near a wall you're holding
         // toward, hands reach for it; otherwise hands up and a little forward like the classic walk
@@ -439,6 +429,8 @@ namespace WalkSimulator.Animators
         {
             float s = Scale;
             bool nearWall = FindWall(out RaycastHit wall);
+            // Arms rise a bit the faster you fall
+            float fallRaise = Mathf.Clamp(-rigidbody.linearVelocity.y / Scale * .03f, 0, .25f);
             // Horizontal direction along the wall, pointing to the body's right
             Vector3 alongWall = nearWall ? Vector3.Cross(Vector3.up, wall.normal).normalized : Vector3.zero;
             if (Vector3.Dot(alongWall, body.right) < 0)
@@ -454,6 +446,7 @@ namespace WalkSimulator.Animators
                 // Let go early if the body has already flown too far from the slap
                 if (Time.time < limb.wallHoldUntil && limb.plantPoint.Distance(hand.DefaultPosition) < .8f * s)
                 {
+                    hand.followInBodySpace = false;
                     hand.followRate = .7f;
                     Orient(limb, limb.plantPoint, limb.plantNormal, Vector3.up, 0);
                     continue;
@@ -464,13 +457,16 @@ namespace WalkSimulator.Animators
                 {
                     Vector3 side = alongWall * (limb == left ? -.22f : .22f);
                     Vector3 point = wall.point + (side + Vector3.up * .2f + wall.normal * .08f) * s;
+                    hand.followInBodySpace = false;
                     hand.followRate = .25f;
                     Orient(limb, point, wall.normal, Vector3.up, 0);
                     continue;
                 }
 
+                // Hang off the body (smoothed relative to it) so the arms don't trail behind a fast fall
+                hand.followInBodySpace = true;
                 hand.followRate = .15f;
-                hand.targetPosition = hand.DefaultPosition + (Vector3.up * .15f + body.forward * .1f) * s;
+                hand.targetPosition = hand.DefaultPosition + (Vector3.up * (.15f + fallRaise) + body.forward * .1f) * s;
                 hand.lookAt = hand.targetPosition + body.forward;
                 hand.up = limb == left ? body.right : -body.right;
             }

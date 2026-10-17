@@ -16,6 +16,11 @@ namespace WalkSimulator.Rigging
         public bool hideControllerTransform = true;
         public Vector3 targetPosition, lookAt, up;
         public float followRate = .1f;
+        // Smooth relative to the body instead of the world, so the hand keeps up when the body
+        // moves fast (falling, flying). Use for poses that hang off the body, not planted hands.
+        public bool followInBodySpace;
+        bool wasFollowingInBodySpace;
+        Vector3 bodySpacePosition;
         public Vector3 hit, lastSnap, normal;
 
         VRMap handMap;
@@ -46,7 +51,16 @@ namespace WalkSimulator.Rigging
 
         void FixedUpdate()
         {
-            transform.position = Vector3.Lerp(transform.position, targetPosition, Extensions.Smoothing(followRate));
+            if (followInBodySpace)
+            {
+                if (!wasFollowingInBodySpace)
+                    bodySpacePosition = body.InverseTransformPoint(transform.position);
+                bodySpacePosition = Vector3.Lerp(bodySpacePosition, body.InverseTransformPoint(targetPosition), Extensions.Smoothing(followRate));
+                transform.position = body.TransformPoint(bodySpacePosition);
+            }
+            else
+                transform.position = Vector3.Lerp(transform.position, targetPosition, Extensions.Smoothing(followRate));
+            wasFollowingInBodySpace = followInBodySpace;
             transform.LookAt(lookAt, up);
             if(hideControllerTransform)
                 controller.position = body.position;
@@ -97,8 +111,22 @@ namespace WalkSimulator.Rigging
             onDisable?.Invoke(this);
         }
 
+        // Places the hand flat against a surface (palm toward -normal) with its knuckles pointing
+        // along forwardHint, curled forward by curl degrees
+        public void Place(Vector3 position, Vector3 normal, Vector3 forwardHint, float curl = 0)
+        {
+            targetPosition = position;
+            Vector3 forward = Vector3.ProjectOnPlane(forwardHint, normal).normalized;
+            if (forward == Vector3.zero) forward = body.forward;
+            Vector3 right = Vector3.Cross(normal, forward);
+            forward = Quaternion.AngleAxis(curl, right) * forward;
+            lookAt = position + forward;
+            up = isLeft ? right : -right;
+        }
+
         public void Reset()
         {
+            followInBodySpace = false;
             grip = trigger = primary = false;
             targetPosition = DefaultPosition;
             lookAt = targetPosition + body.forward;
