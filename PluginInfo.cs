@@ -7,6 +7,6 @@
     {
         public const string GUID = "com.kylethescientist.gorillatag.walksimulator";
         public const string Name = "WalkSimulator";
-        public const string Version = "3.0.3";
+        public const string Version = "3.1.0";
     }
 }
