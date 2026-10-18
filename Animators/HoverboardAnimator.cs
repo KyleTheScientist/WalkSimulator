@@ -14,8 +14,9 @@ namespace WalkSimulator.Animators
     /// either mouse button near a board to grab it with the right hand (the same grab path as the
     /// glider). The game parents the board to that hand with a fixed hold offset and steers by the
     /// board's angle, so every tick the hand is angled so the board lies under you pointing where you
-    /// face, rolled by A/D to carve. W paddles with the left hand against the ground (how the game adds
-    /// speed), Space hops, letting go of the mouse button drops the board.
+    /// face, rolled by A/D to carve. W pushes you along the board (up to the game's own max paddle
+    /// speed) while the free hand animates paddling, Space hops, letting go of the mouse button drops
+    /// the board. Dropped boards are grabbed through their handle's own OnGrab.
     /// Logs diagnostics twice a second while riding, for tuning.
     /// </summary>
     public class HoverboardAnimator : AnimatorBase
@@ -34,6 +35,8 @@ namespace WalkSimulator.Animators
         const float PaddlePeriod = .55f;        // seconds per paddle stroke
         const float PaddleReach = .35f;         // stroke from this far ahead of the shoulder to as far behind
         const float PaddlePress = .04f;         // push this far into the ground during the stroke
+        const float PaddleAcceleration = 6f;    // m/s^2 that W adds along the board
+        const float DefaultMaxPaddleSpeed = 6f; // if the game's value can't be read
         const float HopSpeed = 4f;              // m/s upward for Space
         const float RegrabDelay = .5f;
         const float LogInterval = .5f;
@@ -44,7 +47,7 @@ namespace WalkSimulator.Animators
         public AnimatorBase returnTo;
         InteractionPoint handle;
         float grabStart, paddlePhase, nextLog, lastHop;
-        bool wasHeld;
+        bool wasHeld, triedDirectGrab;
 
         static InteractionPoint[] handles = new InteractionPoint[0];
         static float lastSearch = -100, lastRelease = -100;
@@ -100,6 +103,7 @@ namespace WalkSimulator.Animators
             HeadDriver.Instance.turn = true;
             grabStart = Time.time;
             wasHeld = false;
+            triedDirectGrab = false;
             Logging.Info("Hoverboard: reaching for", handle ? handle.transform.GetPath() : "nothing");
         }
 
@@ -150,8 +154,10 @@ namespace WalkSimulator.Animators
 
             foreach (var hand in new[] { leftHand, rightHand })
             {
-                // Real hand positions matter: the game grabs with them, and paddling is real contact
-                hand.hideControllerTransform = false;
+                // The board follows the visible hands and grabs go through the game's grab code, so the
+                // real (physical) hands stay tucked in the body: down by the ground they'd count as
+                // touching it and shove you around
+                hand.hideControllerTransform = true;
                 hand.followInBodySpace = true;
                 hand.followRate = .6f;
             }
@@ -170,16 +176,10 @@ namespace WalkSimulator.Animators
             var free = visual.IsLeftHanded ? rightHand : leftHand;
             holding.grip = true;
             free.grip = false;
-            // The board follows the visible hand and grip keeps it held, so the holding hand's real
-            // controller can stay tucked in the body (down by the ground it could otherwise count as
-            // touching it and shove you around); only the paddling hand needs real contact
-            holding.hideControllerTransform = true;
-            holding.driveRealHand = false;
-            // The paddling hand needs real contact with the ground
-            free.driveRealHand = true;
 
             Steer(holding, visual);
             Paddle(free);
+            Push();
             LogDiagnostics(holding, visual);
         }
 
@@ -199,6 +199,37 @@ namespace WalkSimulator.Animators
             rightHand.grip = onHandle && squeezePhase;
             EquipmentInteractorPatch.injectRight = handle;
             leftHand.targetPosition = leftHand.DefaultPosition;
+
+            // Dropped boards don't always take the normal grab, so once the hand is on the handle, do what
+            // the game's grab does for them: its OnGrab claims the board and hands you your own
+            if (onHandle && !triedDirectGrab && handle.Holdable is FreeHoverboardHandle freeBoard)
+            {
+                triedDirectGrab = true;
+                try
+                {
+                    Logging.Info("Hoverboard: grabbing dropped board directly");
+                    freeBoard.OnGrab(handle, EquipmentInteractor.instance.rightHand);
+                }
+                catch (System.Exception e) { Logging.Exception(e); }
+            }
+        }
+
+        // Holding W pushes you along the board while on or near the ground, up to the game's own max
+        // paddle speed. (Paddling in the game is the hand pushing on the ground, which these hands can't
+        // do.) The game's hover physics takes it from there: hovering, carving, grinding.
+        void Push()
+        {
+            if (InputHandler.inputDirection.z <= 0) return;
+            var traverse = Traverse.Create(GTPlayer.Instance);
+            bool nearGround = rig.onGround || traverse.Field("hasHoverPoint").GetValue<bool>();
+            if (!nearGround) return;
+            float s = Scale;
+            float maxSpeed = traverse.Field("hoverMaxPaddleSpeed").GetValue<float>();
+            if (maxSpeed <= 0) maxSpeed = DefaultMaxPaddleSpeed;
+            Vector3 facing = Gravity.Flatten(body.forward).normalized;
+            float along = Vector3.Dot(rigidbody.linearVelocity, facing);
+            if (along >= maxSpeed * s) return;
+            rigidbody.linearVelocity += facing * Mathf.Min(PaddleAcceleration * s * Time.deltaTime, maxSpeed * s - along);
         }
 
         // Angle the holding hand so the board (held at a fixed offset from the rig's hand) lies under
@@ -301,11 +332,8 @@ namespace WalkSimulator.Animators
             string hoverHeight = "no ground below";
             if (Physics.Raycast(board.position + Gravity.Up * .5f, Gravity.Down, out RaycastHit ground, 5, player.locomotionEnabledLayers))
                 hoverHeight = $"{ground.distance - .5f:0.00}m (ideal {traverse.Field("hoverIdealHeight").GetValue<float>():0.00}m)";
-            var freeDriver = visual.IsLeftHanded ? rightHand : leftHand;
-            var freeController = player.GetControllerTransform(freeDriver.isLeft);
-            float paddleOffset = freeController ? freeController.position.Distance(freeDriver.transform.position) : -1;
             Logging.Info($"Hoverboard: speed {rigidbody.linearVelocity.magnitude:0.0} m/s, " +
-                $"board height {hoverHeight}, paddle hand {paddleOffset:0.00}m from target, " +
+                $"board height {hoverHeight}, W held {InputHandler.inputDirection.z > 0}, " +
                 $"hovering {traverse.Field("didHoverLastFrame").GetValue<bool>()}, " +
                 $"hover point {traverse.Field("hasHoverPoint").GetValue<bool>()}, " +
                 $"allowed {player.isHoverAllowed}, board points {pointingError:0}° off facing, " +

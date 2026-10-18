@@ -19,8 +19,6 @@ namespace WalkSimulator.Rigging
         // Smooth relative to the body instead of the world, so the hand keeps up when the body
         // moves fast (falling, flying). Use for poses that hang off the body, not planted hands.
         public bool followInBodySpace;
-        // Put the game's physical hand here too (see RealHandPatch), for real contact with the world
-        public bool driveRealHand;
         bool wasFollowingInBodySpace;
         Vector3 bodySpacePosition;
         public Vector3 hit, lastSnap, normal;
@@ -116,7 +114,6 @@ namespace WalkSimulator.Rigging
             catch (Exception e) { Logging.Exception(e); }
             grip = trigger = primary = secondary = false;
             followInBodySpace = false;
-            driveRealHand = false;
             if (isLeft)
                 FingerPatch.forceLeftGrip = FingerPatch.forceLeftTrigger = FingerPatch.forceLeftPrimary = FingerPatch.forceLeftSecondary = false;
             else
@@ -148,7 +145,6 @@ namespace WalkSimulator.Rigging
         public void Reset()
         {
             followInBodySpace = false;
-            driveRealHand = false;
             grip = trigger = primary = false;
             targetPosition = DefaultPosition;
             lookAt = targetPosition + body.forward;
