@@ -1,8 +1,10 @@
 # WalkSimulator
 
-Play Gorilla Tag with a keyboard and mouse. Walk, run, climb walls, swim, fly, and ride ziplines, ropes, gliders and broomsticks, all with procedurally animated gorilla arms, no VR headset required.
+Play Gorilla Tag with a keyboard and mouse. Walk, run, climb walls, swim, fly, and ride ziplines, ropes, gliders, broomsticks and hoverboards, all with procedurally animated gorilla arms, no VR headset required.
 
 WalkSimulator only works in **modded lobbies**. In a public lobby it turns itself off.
+
+> This product is not affiliated with Another Axiom Inc. or its videogames Gorilla Tag and Orion Drift and is not endorsed or otherwise sponsored by Another Axiom. Portions of the materials contained herein are property of Another Axiom. ©2021 Another Axiom Inc.
 
 ## Requirements
 
