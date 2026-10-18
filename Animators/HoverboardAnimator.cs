@@ -25,7 +25,11 @@ namespace WalkSimulator.Animators
         const float GrabTimeout = 1.5f;
         const float OnHandleDistance = .1f;
         const float SqueezePeriod = .2f;
-        const float BoardDrop = .55f;           // board this far below the body
+        // Board this far below the body. The game only hovers when the board is within its ideal hover
+        // height of the ground (logged as "hover height"), and it holds the board at a fixed offset from
+        // the head, so this mostly sets posture; too low and it ends up in the ground.
+        const float BoardDrop = .3f;
+        const float HopCooldown = .4f;
         const float CarveDegrees = 25f;         // A/D rolls the board this much
         const float PaddlePeriod = .55f;        // seconds per paddle stroke
         const float PaddleReach = .35f;         // stroke from this far ahead of the shoulder to as far behind
@@ -39,7 +43,7 @@ namespace WalkSimulator.Animators
 
         public AnimatorBase returnTo;
         InteractionPoint handle;
-        float grabStart, paddlePhase, nextLog;
+        float grabStart, paddlePhase, nextLog, lastHop;
         bool wasHeld;
 
         static InteractionPoint[] handles = new InteractionPoint[0];
@@ -49,6 +53,11 @@ namespace WalkSimulator.Animators
         static bool GrabHeld => Mouse.current.leftButton.isPressed || Mouse.current.rightButton.isPressed;
         static HoverboardVisual Visual { get { try { return visualRef(GTPlayer.Instance); } catch { return null; } } }
         static bool Riding => GTPlayer.Instance.enableHoverMode && Visual && Visual.IsHeld;
+        static bool HoveredLastFrame
+        {
+            get { try { return Traverse.Create(GTPlayer.Instance).Field("didHoverLastFrame").GetValue<bool>(); } catch { return false; } }
+        }
+
         static bool IsBoardHandle(InteractionPoint point) =>
             point && (point.Holdable is HoverboardHandle || point.Holdable is FreeHoverboardHandle);
 
@@ -116,8 +125,13 @@ namespace WalkSimulator.Animators
                 Leave("let go");
                 return;
             }
-            if (wasHeld && Keyboard.current.spaceKey.wasPressedThisFrame)
+            // Hop only off the ground (or while hovering over it), and not again right away
+            if (wasHeld && Keyboard.current.spaceKey.wasPressedThisFrame && Time.time - lastHop > HopCooldown
+                && (rig.onGround || HoveredLastFrame))
+            {
+                lastHop = Time.time;
                 rigidbody.linearVelocity += Gravity.Up * HopSpeed * Scale;
+            }
         }
 
         public override void Animate()
@@ -160,6 +174,9 @@ namespace WalkSimulator.Animators
             // controller can stay tucked in the body (down by the ground it could otherwise count as
             // touching it and shove you around); only the paddling hand needs real contact
             holding.hideControllerTransform = true;
+            holding.driveRealHand = false;
+            // The paddling hand needs real contact with the ground
+            free.driveRealHand = true;
 
             Steer(holding, visual);
             Paddle(free);
@@ -280,7 +297,15 @@ namespace WalkSimulator.Animators
             }
             catch { }
             var traverse = Traverse.Create(player);
+            // How high the board is over the ground, next to the height the game hovers it at
+            string hoverHeight = "no ground below";
+            if (Physics.Raycast(board.position + Gravity.Up * .5f, Gravity.Down, out RaycastHit ground, 5, player.locomotionEnabledLayers))
+                hoverHeight = $"{ground.distance - .5f:0.00}m (ideal {traverse.Field("hoverIdealHeight").GetValue<float>():0.00}m)";
+            var freeDriver = visual.IsLeftHanded ? rightHand : leftHand;
+            var freeController = player.GetControllerTransform(freeDriver.isLeft);
+            float paddleOffset = freeController ? freeController.position.Distance(freeDriver.transform.position) : -1;
             Logging.Info($"Hoverboard: speed {rigidbody.linearVelocity.magnitude:0.0} m/s, " +
+                $"board height {hoverHeight}, paddle hand {paddleOffset:0.00}m from target, " +
                 $"hovering {traverse.Field("didHoverLastFrame").GetValue<bool>()}, " +
                 $"hover point {traverse.Field("hasHoverPoint").GetValue<bool>()}, " +
                 $"allowed {player.isHoverAllowed}, board points {pointingError:0}° off facing, " +
