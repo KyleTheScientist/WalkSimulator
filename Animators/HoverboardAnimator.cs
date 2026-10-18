@@ -203,8 +203,9 @@ namespace WalkSimulator.Animators
 
             // Dropped boards don't always take the normal grab, so once the hand is on the handle, do what
             // the game's grab does for them: claim the board and hand you your own. The game would hold it
-            // at whatever angle the board was to your hand (awkward for a board lying on the ground), so
-            // use the handle's default hold instead, like a fresh board.
+            // at whatever angle the board was to your hand (awkward for a board lying on the ground), and
+            // the dropped board's own default hold puts the hand in the torso, so use the hold a fresh
+            // board from the rack uses.
             if (onHandle && !triedDirectGrab && handle.Holdable is FreeHoverboardHandle freeBoard)
             {
                 triedDirectGrab = true;
@@ -215,7 +216,15 @@ namespace WalkSimulator.Animators
                     if (hasParentBoardRef(freeBoard) && board)
                         FreeHoverboardManager.instance.SendGrabBoardRPC(board);
                     Color color = board ? board.boardColor : VRRig.LocalRig.playerColor;
-                    GTPlayer.Instance.GrabPersonalHoverboard(false, defaultHoldPosRef(freeBoard), defaultHoldAngleRef(freeBoard), color);
+                    Vector3 holdPosition = defaultHoldPosRef(freeBoard);
+                    Quaternion holdRotation = defaultHoldAngleRef(freeBoard);
+                    var rackHandle = FindAnyObjectByType<HoverboardHandle>(FindObjectsInactive.Include);
+                    if (rackHandle)
+                    {
+                        holdPosition = rackHoldPosRef(rackHandle);
+                        holdRotation = rackHoldAngleRef(rackHandle);
+                    }
+                    GTPlayer.Instance.GrabPersonalHoverboard(false, holdPosition, holdRotation, color);
                 }
                 catch (System.Exception e) { Logging.Exception(e); }
             }
@@ -229,6 +238,10 @@ namespace WalkSimulator.Animators
             AccessTools.FieldRefAccess<FreeHoverboardHandle, Vector3>("defaultHoldPosRight");
         static readonly AccessTools.FieldRef<FreeHoverboardHandle, Quaternion> defaultHoldAngleRef =
             AccessTools.FieldRefAccess<FreeHoverboardHandle, Quaternion>("defaultHoldAngleRight");
+        static readonly AccessTools.FieldRef<HoverboardHandle, Vector3> rackHoldPosRef =
+            AccessTools.FieldRefAccess<HoverboardHandle, Vector3>("defaultHoldPosRight");
+        static readonly AccessTools.FieldRef<HoverboardHandle, Quaternion> rackHoldAngleRef =
+            AccessTools.FieldRefAccess<HoverboardHandle, Quaternion>("defaultHoldAngleRight");
 
         // Holding W pushes you along the board while on or near the ground, up to the game's own max
         // paddle speed. (Paddling in the game is the hand pushing on the ground, which these hands can't
