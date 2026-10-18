@@ -174,8 +174,9 @@ namespace WalkSimulator.Animators
             var visual = Visual;
             var holding = visual.IsLeftHanded ? leftHand : rightHand;
             var free = visual.IsLeftHanded ? rightHand : leftHand;
-            holding.grip = true;
-            free.grip = false;
+            // Whole hand round the board (grip alone leaves the index finger pointing)
+            holding.grip = holding.trigger = true;
+            free.grip = free.trigger = false;
 
             Steer(holding, visual);
             Paddle(free);
@@ -201,18 +202,33 @@ namespace WalkSimulator.Animators
             leftHand.targetPosition = leftHand.DefaultPosition;
 
             // Dropped boards don't always take the normal grab, so once the hand is on the handle, do what
-            // the game's grab does for them: its OnGrab claims the board and hands you your own
+            // the game's grab does for them: claim the board and hand you your own. The game would hold it
+            // at whatever angle the board was to your hand (awkward for a board lying on the ground), so
+            // use the handle's default hold instead, like a fresh board.
             if (onHandle && !triedDirectGrab && handle.Holdable is FreeHoverboardHandle freeBoard)
             {
                 triedDirectGrab = true;
                 try
                 {
                     Logging.Info("Hoverboard: grabbing dropped board directly");
-                    freeBoard.OnGrab(handle, EquipmentInteractor.instance.rightHand);
+                    var board = parentFreeBoardRef(freeBoard);
+                    if (hasParentBoardRef(freeBoard) && board)
+                        FreeHoverboardManager.instance.SendGrabBoardRPC(board);
+                    Color color = board ? board.boardColor : VRRig.LocalRig.playerColor;
+                    GTPlayer.Instance.GrabPersonalHoverboard(false, defaultHoldPosRef(freeBoard), defaultHoldAngleRef(freeBoard), color);
                 }
                 catch (System.Exception e) { Logging.Exception(e); }
             }
         }
+
+        static readonly AccessTools.FieldRef<FreeHoverboardHandle, FreeHoverboardInstance> parentFreeBoardRef =
+            AccessTools.FieldRefAccess<FreeHoverboardHandle, FreeHoverboardInstance>("parentFreeBoard");
+        static readonly AccessTools.FieldRef<FreeHoverboardHandle, bool> hasParentBoardRef =
+            AccessTools.FieldRefAccess<FreeHoverboardHandle, bool>("hasParentBoard");
+        static readonly AccessTools.FieldRef<FreeHoverboardHandle, Vector3> defaultHoldPosRef =
+            AccessTools.FieldRefAccess<FreeHoverboardHandle, Vector3>("defaultHoldPosRight");
+        static readonly AccessTools.FieldRef<FreeHoverboardHandle, Quaternion> defaultHoldAngleRef =
+            AccessTools.FieldRefAccess<FreeHoverboardHandle, Quaternion>("defaultHoldAngleRight");
 
         // Holding W pushes you along the board while on or near the ground, up to the game's own max
         // paddle speed. (Paddling in the game is the hand pushing on the ground, which these hands can't
