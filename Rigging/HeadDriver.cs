@@ -92,11 +92,15 @@ namespace WalkSimulator.Rigging
                 Vector3 facing = Vector3.ProjectOnPlane(GTPlayer.Instance.bodyCollider.transform.forward, up);
                 if (facing.sqrMagnitude < .0001f) facing = Vector3.ProjectOnPlane(head.forward, up);
                 if (facing.sqrMagnitude > .0001f)
-                    GorillaTagger.Instance.offlineVRRig.headConstraint.rotation =
-                        Quaternion.LookRotation(facing, up) * Quaternion.Euler(pitch, 0, 0);
-                // The third-person orbit flips over past about 60 degrees, so cap it there
-                if (thirpyTarget)
-                    thirpyTarget.localEulerAngles = new Vector3(Mathf.Clamp(pitch, -ThirdPersonPitchLimit, ThirdPersonPitchLimit), 0, 0);
+                {
+                    Quaternion level = Quaternion.LookRotation(facing, up);
+                    GorillaTagger.Instance.offlineVRRig.headConstraint.rotation = level * Quaternion.Euler(pitch, 0, 0);
+                    // The third-person orbit flips over past about 60 degrees, so cap it there. Set in
+                    // world space, since its parents (the head) can carry pitch of their own that
+                    // would otherwise add to it
+                    if (thirpyTarget)
+                        thirpyTarget.rotation = level * Quaternion.Euler(Mathf.Clamp(pitch, -ThirdPersonPitchLimit, ThirdPersonPitchLimit), 0, 0);
+                }
                 GTPlayer.Instance.headCollider.transform.localEulerAngles = new Vector3(pitch, 0, 0);
             }
         }
