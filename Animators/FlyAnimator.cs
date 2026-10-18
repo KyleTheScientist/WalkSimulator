@@ -59,7 +59,7 @@ namespace WalkSimulator.Animators
             rig.targetPosition = body.TransformPoint(InputHandler.inputDirection * CurrentSpeed);
             // Gentle bob while hovering, like floating in water
             float scale = GTPlayer.Instance.scale;
-            rig.targetPosition += Vector3.up * Mathf.Sin(Time.time * 1.5f) * .04f * scale * (1 - flyBlend);
+            rig.targetPosition += Gravity.Up * Mathf.Sin(Time.time * 1.5f) * .04f * scale * (1 - flyBlend);
         }
 
         void AnimateHands()

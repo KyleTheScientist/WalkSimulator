@@ -71,7 +71,7 @@ namespace WalkSimulator.Rigging
             if (firstPerson && !GTPlayer.Instance.inOverlay)
             {
                 ShoulderCameraControl.Take(this, FirstPersonFieldOfView);
-                ShoulderCameraControl.Place(GTPlayer.Instance.headCollider.transform.TransformPoint(offset), Quaternion.LookRotation(head.forward));
+                ShoulderCameraControl.Place(GTPlayer.Instance.headCollider.transform.TransformPoint(offset), Quaternion.LookRotation(head.forward, Gravity.Up));
             }
             else
                 ShoulderCameraControl.Release(this);
@@ -82,21 +82,20 @@ namespace WalkSimulator.Rigging
                 // Horizontal Axis
                 GTPlayer.Instance.Turn(Mouse.current.delta.value.x / 10f);
 
-                //Vertical Axis
-                var angles = GorillaTagger.Instance.offlineVRRig.headConstraint.eulerAngles;
-                angles.x = angles.x - Mouse.current.delta.value.y / 10f;
-                if (angles.x > 180)
-                    angles.x -= 360;
-                // Look up to 80 degrees up and 85 down (short of straight up/down, where the view flips),
-                // so buttons low and close are reachable
-                angles.x = Mathf.Clamp(angles.x, -80, 85);
-                GorillaTagger.Instance.offlineVRRig.headConstraint.eulerAngles = angles;
-                angles.y += 90;
-                //head.localEulerAngles = angles;
-                //Camera.main.transform.localEulerAngles = angles;
+                // Vertical axis. Look up to 80 degrees up and 85 down (short of straight up/down, where
+                // the view flips), so buttons low and close are reachable
+                pitch = Mathf.Clamp(pitch - Mouse.current.delta.value.y / 10f, -80, 85);
+                // Built from the body's facing and gravity's up rather than world angles, so it still
+                // works when a gravity zone has tilted the player onto a wall or ceiling
+                Vector3 up = Gravity.Up;
+                Vector3 facing = Vector3.ProjectOnPlane(GTPlayer.Instance.bodyCollider.transform.forward, up);
+                if (facing.sqrMagnitude < .0001f) facing = Vector3.ProjectOnPlane(head.forward, up);
+                if (facing.sqrMagnitude > .0001f)
+                    GorillaTagger.Instance.offlineVRRig.headConstraint.rotation =
+                        Quaternion.LookRotation(facing, up) * Quaternion.Euler(pitch, 0, 0);
                 if (thirpyTarget)
-                    thirpyTarget.localEulerAngles = new Vector3(angles.x, 0, 0);
-                GTPlayer.Instance.headCollider.transform.localEulerAngles = new Vector3(angles.x, 0, 0);
+                    thirpyTarget.localEulerAngles = new Vector3(pitch, 0, 0);
+                GTPlayer.Instance.headCollider.transform.localEulerAngles = new Vector3(pitch, 0, 0);
             }
         }
 
@@ -108,6 +107,7 @@ namespace WalkSimulator.Rigging
         }
 
         bool firstPerson;
+        float pitch;
         const float FirstPersonFieldOfView = 90;
 
         internal void ToggleCam()

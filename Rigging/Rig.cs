@@ -121,7 +121,7 @@ namespace WalkSimulator.Rigging
             {
                 Slide();
                 // Height is still held firmly so the body doesn't sink into the ground
-                rigidbody.linearVelocity = Vector3.ProjectOnPlane(slideVelocity, Vector3.up) + Vector3.up * desired.y;
+                rigidbody.linearVelocity = Gravity.Flatten(slideVelocity) + Vector3.Project(desired, Gravity.Up);
             }
             else
             {
@@ -130,7 +130,8 @@ namespace WalkSimulator.Rigging
             }
 
             if (!useGravity)
-                rigidbody.AddForce(-Physics.gravity * rigidbody.mass * scale);
+                // Cancel the game's gravity (which gravity zones can point any way)
+                rigidbody.AddForce(-Gravity.Acceleration * scale, ForceMode.Acceleration);
 
 
             //DebugPoint.Get("Skeleton.targetPosition", Color.red).position = targetPosition;
@@ -149,7 +150,7 @@ namespace WalkSimulator.Rigging
                 slideVelocity = Vector3.ProjectOnPlane(rigidbody.linearVelocity, lastNormal);
             SetSliding(true);
 
-            slideVelocity += Physics.gravity * scale * dt;
+            slideVelocity += Gravity.Acceleration * scale * dt;
             slideVelocity = Vector3.ProjectOnPlane(slideVelocity, lastNormal);
 
             Vector3 steer = Vector3.ProjectOnPlane(body.TransformDirection(InputHandler.inputDirectionNoY), lastNormal).normalized;
@@ -160,7 +161,7 @@ namespace WalkSimulator.Rigging
                 // offsets the target by speed / 10 (4, or 12 sprinting)
                 float pushOffSpeed = (Keyboard.current.leftShiftKey.isPressed ? 12f : 4f) * .4f * scale;
                 // Only on nearly flat ice, or you could skate up any slope forever
-                bool flat = Vector3.Dot(lastNormal, Vector3.up) > MinPushOffFlatness;
+                bool flat = Vector3.Dot(lastNormal, Gravity.Up) > MinPushOffFlatness;
                 if (speed < pushOffSpeed && flat)
                     slideVelocity += steer * Mathf.Min(PushOffAcceleration * scale * dt, pushOffSpeed - speed);
                 else
@@ -204,9 +205,10 @@ namespace WalkSimulator.Rigging
             float radius = raycastRadius * scale;
             //DebugPoint.Get("Skeleton.raycastOrigin", Color.magenta).position = origin;
 
-            bool didLineHit = Physics.Raycast(origin, Vector3.down, out lineHit,
+            Vector3 down = Gravity.Down;
+            bool didLineHit = Physics.Raycast(origin, down, out lineHit,
                 distance, GTPlayer.Instance.locomotionEnabledLayers);
-            bool didSphereHit = Physics.SphereCast(origin, radius, Vector3.down, out sphereHit,
+            bool didSphereHit = Physics.SphereCast(origin, radius, down, out sphereHit,
                 distance, GTPlayer.Instance.locomotionEnabledLayers);
             //bool didSphereHit = false;
 
@@ -219,8 +221,8 @@ namespace WalkSimulator.Rigging
             if (didLineHit && didSphereHit)
             {
                 float y = ForecastedY();
-                // choose the hit with the closest y value to the forecasted y
-                hit = Mathf.Abs(lineHit.point.y - y) < Mathf.Abs(sphereHit.point.y - y) ?
+                // choose the hit with the closest height to the forecasted height
+                hit = Mathf.Abs(Gravity.Height(lineHit.point) - y) < Mathf.Abs(Gravity.Height(sphereHit.point) - y) ?
                     lineHit : sphereHit;
             }
             else if (didSphereHit && (sliding || Time.time - slideEndTime < SlideEdgeGrace))
@@ -246,15 +248,14 @@ namespace WalkSimulator.Rigging
             onGround = true;
             try { slipperiness = GTPlayer.Instance.GetSlidePercentage(hit); }
             catch { slipperiness = 0; }
-            lastGroundPosition = hit.point;
-            lastGroundPosition.x = body.position.x;
-            lastGroundPosition.z = body.position.z;
+            // Directly below the body, at the ground's height (along gravity)
+            lastGroundPosition = body.position + Vector3.Project(hit.point - body.position, Gravity.Up);
             //DebugPoint.Get("Skeleton.lastGround", new Color(.6f, .6f, .1f)).position = lastGroundPosition;
         }
 
         float ForecastedY()
         {
-            Ray ray = new Ray(targetPosition + Vector3.up, Vector3.down);
+            Ray ray = new Ray(targetPosition + Gravity.Up, Gravity.Down);
             //DebugPoint.Get("Skeleton.forecastedY origin", new Color(.5f, 0, .5f)).position = targetPosition;
             try
             {
@@ -277,11 +278,11 @@ namespace WalkSimulator.Rigging
             if (Physics.Raycast(ray, out hit, Mathf.Infinity, GTPlayer.Instance.locomotionEnabledLayers))
             {
                 //DebugPoint.Get("Skeleton.forecastedY", new Color(.7f, .2f, .7f)).position = hit.point;
-                return hit.point.y;
+                return Gravity.Height(hit.point);
             }
 
 
-            return lastGroundPosition.y;
+            return Gravity.Height(lastGroundPosition);
         }
     }
 }

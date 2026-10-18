@@ -79,9 +79,7 @@ namespace WalkSimulator.Animators
         {
             get
             {
-                Vector3 direction = body.TransformDirection(InputHandler.inputDirectionNoY);
-                direction.y = 0;
-                return direction.normalized;
+                return Gravity.Flatten(body.TransformDirection(InputHandler.inputDirectionNoY)).normalized;
             }
         }
 
@@ -129,7 +127,7 @@ namespace WalkSimulator.Animators
                 else if (!hasJumped && rig.onGround)
                 {
                     StartJump();
-                    rigidbody.AddForce(Vector3.up * 250 * Scale, ForceMode.Impulse);
+                    rigidbody.AddForce(Gravity.Up * 250 * Scale, ForceMode.Impulse);
                 }
             }
             if (hasJumped && !rig.onGround || Time.time - jumpTime > 1)
@@ -156,7 +154,7 @@ namespace WalkSimulator.Animators
             if (!Physics.SphereCast(body.position, .15f * s, direction, out wall, WallReach * s,
                 GTPlayer.Instance.locomotionEnabledLayers))
                 return false;
-            float upDot = Vector3.Dot(wall.normal, Vector3.up);
+            float upDot = Vector3.Dot(wall.normal, Gravity.Up);
             return upDot < WallMaxUpDot && upDot > WallMinUpDot;
         }
 
@@ -166,9 +164,9 @@ namespace WalkSimulator.Animators
             lastWallJump = Time.time;
 
             // Keep half of any speed along the wall, then go up and push off
-            Vector3 away = Vector3.ProjectOnPlane(wall.normal, Vector3.up).normalized;
-            Vector3 along = Vector3.ProjectOnPlane(Vector3.ProjectOnPlane(rigidbody.linearVelocity, wall.normal), Vector3.up);
-            rigidbody.linearVelocity = along * .5f + Vector3.up * JumpSpeed * WallJumpUpFactor + away * WallJumpPush * Scale;
+            Vector3 away = Vector3.ProjectOnPlane(wall.normal, Gravity.Up).normalized;
+            Vector3 along = Vector3.ProjectOnPlane(Vector3.ProjectOnPlane(rigidbody.linearVelocity, wall.normal), Gravity.Up);
+            rigidbody.linearVelocity = along * .5f + Gravity.Up * JumpSpeed * WallJumpUpFactor + away * WallJumpPush * Scale;
 
             // Slap the hand on the wall's side; alternate for walls straight ahead
             float side = Vector3.Dot(-away, body.right);
@@ -211,16 +209,15 @@ namespace WalkSimulator.Animators
             targetHeight -= dip;
 
             height = Mathf.Lerp(height, targetHeight, Extensions.Smoothing(.3f));
-            Vector3 targetPosition = rig.lastGroundPosition + Vector3.up * height * Scale;
+            Vector3 targetPosition = rig.lastGroundPosition + Gravity.Up * height * Scale;
 
             // Sway toward whichever hand is bearing weight (left mid-stance is at phase = duty/2)
             float swayAmount = Mathf.Cos((phase - Duty / 2) * Mathf.PI * 2) * Sway * Scale * moveWeight;
             targetPosition -= body.right * swayAmount;
 
             // Movement
-            Vector3 direction = body.TransformDirection(InputHandler.inputDirectionNoY);
-            direction.y = 0;
-            if (Vector3.Dot(rig.lastNormal, Vector3.up) > .3f) // If the slope is too steep, don't correct the direction
+            Vector3 direction = Gravity.Flatten(body.TransformDirection(InputHandler.inputDirectionNoY));
+            if (Vector3.Dot(rig.lastNormal, Gravity.Up) > .3f) // If the slope is too steep, don't correct the direction
                 direction = Vector3.ProjectOnPlane(direction, rig.lastNormal);
             float speed = IsSprinting ? WalkSpeed * SprintMultiplier : WalkSpeed;
             targetPosition += direction * Scale * speed / 10f;
@@ -234,7 +231,7 @@ namespace WalkSimulator.Animators
         {
             Vector3 direction = InputDirection;
             if (direction == Vector3.zero) return;
-            Vector3 horizontal = Vector3.ProjectOnPlane(rigidbody.linearVelocity, Vector3.up);
+            Vector3 horizontal = Vector3.ProjectOnPlane(rigidbody.linearVelocity, Gravity.Up);
             Vector3 next = horizontal + direction * AirAcceleration * Scale * Time.deltaTime;
             next = Vector3.ClampMagnitude(next, Mathf.Max(horizontal.magnitude, GroundSpeed));
             rigidbody.AddForce(next - horizontal, ForceMode.VelocityChange);
@@ -269,7 +266,7 @@ namespace WalkSimulator.Animators
             }
 
             float dt = Time.deltaTime;
-            Vector3 velocity = Vector3.ProjectOnPlane(rigidbody.linearVelocity, Vector3.up);
+            Vector3 velocity = Vector3.ProjectOnPlane(rigidbody.linearVelocity, Gravity.Up);
             float speed = velocity.magnitude;
             bool moving = speed > MinGaitSpeed * Scale && !NotMoving;
 
@@ -373,7 +370,7 @@ namespace WalkSimulator.Animators
             limb.plantNormal = spot.normal;
         }
 
-        static float FlatDistance(Vector3 a, Vector3 b) => Vector3.ProjectOnPlane(a - b, Vector3.up).magnitude;
+        static float FlatDistance(Vector3 a, Vector3 b) => Vector3.ProjectOnPlane(a - b, Gravity.Up).magnitude;
 
         // Where a swinging hand should land. It leads the body by enough that it plants ahead of
         // the shoulder and gets passed by half a stance's worth of travel before lifting again.
@@ -390,11 +387,11 @@ namespace WalkSimulator.Animators
         GroundHit GroundBelow(Vector3 point, Limb limb)
         {
             float s = Scale;
-            if (Physics.Raycast(point + Vector3.up * .4f * s, Vector3.down, out RaycastHit hit,
+            if (Physics.Raycast(point + Gravity.Up * .4f * s, Gravity.Down, out RaycastHit hit,
                 .9f * s, GTPlayer.Instance.locomotionEnabledLayers))
                 return new GroundHit() { point = hit.point, normal = hit.normal };
             // Nothing below (ledge): let the hand hang where it would be
-            return new GroundHit() { point = point, normal = limb.planted ? limb.plantNormal : Vector3.up };
+            return new GroundHit() { point = point, normal = limb.planted ? limb.plantNormal : Gravity.Up };
         }
 
         // Positions and orients the hand
@@ -459,9 +456,9 @@ namespace WalkSimulator.Animators
             float s = Scale;
             bool nearWall = FindWall(out RaycastHit wall);
             // Arms rise a bit the faster you fall
-            float fallRaise = Mathf.Clamp(-rigidbody.linearVelocity.y / Scale * .03f, 0, .25f);
+            float fallRaise = Mathf.Clamp(-Gravity.Height(rigidbody.linearVelocity) / Scale * .03f, 0, .25f);
             // Horizontal direction along the wall, pointing to the body's right
-            Vector3 alongWall = nearWall ? Vector3.Cross(Vector3.up, wall.normal).normalized : Vector3.zero;
+            Vector3 alongWall = nearWall ? Vector3.Cross(Gravity.Up, wall.normal).normalized : Vector3.zero;
             if (Vector3.Dot(alongWall, body.right) < 0)
                 alongWall = -alongWall;
 
@@ -477,7 +474,7 @@ namespace WalkSimulator.Animators
                 {
                     hand.followInBodySpace = false;
                     hand.followRate = .7f;
-                    Orient(limb, limb.plantPoint, limb.plantNormal, Vector3.up, 0);
+                    Orient(limb, limb.plantPoint, limb.plantNormal, Gravity.Up, 0);
                     continue;
                 }
                 limb.wallHoldUntil = 0;
@@ -485,17 +482,17 @@ namespace WalkSimulator.Animators
                 if (nearWall && alongWall != Vector3.zero)
                 {
                     Vector3 side = alongWall * (limb == left ? -.22f : .22f);
-                    Vector3 point = wall.point + (side + Vector3.up * .2f + wall.normal * .08f) * s;
+                    Vector3 point = wall.point + (side + Gravity.Up * .2f + wall.normal * .08f) * s;
                     hand.followInBodySpace = false;
                     hand.followRate = .25f;
-                    Orient(limb, point, wall.normal, Vector3.up, 0);
+                    Orient(limb, point, wall.normal, Gravity.Up, 0);
                     continue;
                 }
 
                 // Hang off the body (smoothed relative to it) so the arms don't trail behind a fast fall
                 hand.followInBodySpace = true;
                 hand.followRate = .15f;
-                hand.targetPosition = hand.DefaultPosition + (Vector3.up * (.15f + fallRaise) + body.forward * .1f) * s;
+                hand.targetPosition = hand.DefaultPosition + (Gravity.Up * (.15f + fallRaise) + body.forward * .1f) * s;
                 hand.lookAt = hand.targetPosition + body.forward;
                 hand.up = limb == left ? body.right : -body.right;
             }
