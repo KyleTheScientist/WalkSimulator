@@ -63,7 +63,7 @@ namespace WalkSimulator.Menus
                 lines.Add(("Space", "Jump"));
                 lines.Add(("Space + into wall", "Wall jump (repeat to climb)"));
                 lines.Add(("Ctrl", "Crouch"));
-                lines.Add(("Hold click", "Grab a zipline, rope, glider or broom"));
+                lines.Add(("Hold click", "Grab a zipline, rope, glider, broom or board"));
             }
             else if (animator == plugin.flyAnimator)
             {
@@ -111,6 +111,15 @@ namespace WalkSimulator.Menus
                 lines.Add(("Broomstick", ""));
                 lines.Add(("Release click", "Let go"));
                 lines.Add(("Space", "Jump off"));
+            }
+            else if (animator == plugin.hoverboardAnimator)
+            {
+                lines.Add(("Hoverboard", ""));
+                lines.Add(("Mouse", "Steer"));
+                lines.Add(("A / D", "Carve"));
+                lines.Add(("W", "Paddle"));
+                lines.Add(("Space", "Hop"));
+                lines.Add(("Release click", "Let go"));
             }
             else if (animator == plugin.emoteAnimator)
             {

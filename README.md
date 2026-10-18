@@ -47,7 +47,7 @@ Without a VR headset, you start in walk mode. With a headset connected, you star
 | Space | Jump |
 | Space while holding a direction into a wall | Wall jump (repeat to climb) |
 | Ctrl | Crouch |
-| Hold left / right click | Grab a zipline, rope, glider or broomstick |
+| Hold left / right click | Grab a zipline, rope, glider, broomstick or hoverboard |
 
 Walking onto icy surfaces makes you slide. Walking into deep water switches to swimming automatically.
 
@@ -78,6 +78,18 @@ Flowing water carries you along.
 | W / S | Dive / climb |
 | Mouse | Look and turn |
 | WASD, Shift, Space (on the ground) | Walk, sprint and jump while carrying it |
+| Release the mouse button | Let go |
+
+### Hoverboard
+
+Grab a board inside a hover area to ride it with the game's own hoverboard physics.
+
+| Key | Action |
+| --- | --- |
+| Mouse | Steer |
+| A / D | Carve |
+| W | Paddle |
+| Space | Hop |
 | Release the mouse button | Let go |
 
 ### Fly

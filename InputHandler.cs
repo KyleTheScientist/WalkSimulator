@@ -47,12 +47,13 @@ namespace WalkSimulator
                 Plugin.Instance.ToggleVRMode();
 
             // Walking switches to swimming in deep water, and to riding/swinging/gliding when
-            // grabbing a zipline, rope, glider or broomstick
+            // grabbing a zipline, rope, glider, broomstick or hoverboard
             SwimAnimator.CheckEnter();
             ZiplineAnimator.CheckGrab();
             RopeAnimator.CheckGrab();
             GliderAnimator.CheckGrab();
             BroomAnimator.CheckGrab();
+            HoverboardAnimator.CheckGrab();
 
             var radialMenu = Plugin.Instance.radialMenu;
             radialMenu.enabled = Keyboard.current.tabKey.isPressed;

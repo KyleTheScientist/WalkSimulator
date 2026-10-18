@@ -1,0 +1,291 @@
+using GorillaLocomotion;
+using HarmonyLib;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.InputSystem;
+using WalkSimulator.Patches;
+using WalkSimulator.Rigging;
+using WalkSimulator.Tools;
+
+namespace WalkSimulator.Animators
+{
+    /// <summary>
+    /// Hoverboards, ridden with the game's own hoverboard physics. While walking in a hover area, hold
+    /// either mouse button near a board to grab it with the right hand (the same grab path as the
+    /// glider). The game parents the board to that hand with a fixed hold offset and steers by the
+    /// board's angle, so every tick the hand is angled so the board lies under you pointing where you
+    /// face, rolled by A/D to carve. W paddles with the left hand against the ground (how the game adds
+    /// speed), Space hops, letting go of the mouse button drops the board.
+    /// Logs diagnostics twice a second while riding, for tuning.
+    /// </summary>
+    public class HoverboardAnimator : AnimatorBase
+    {
+        // ---- Tuning ----
+        const float GrabReach = 1.3f;           // handle within this distance of the head
+        const float GrabTimeout = 1.5f;
+        const float OnHandleDistance = .1f;
+        const float SqueezePeriod = .2f;
+        const float BoardDrop = .55f;           // board this far below the body
+        const float CarveDegrees = 25f;         // A/D rolls the board this much
+        const float PaddlePeriod = .55f;        // seconds per paddle stroke
+        const float PaddleReach = .35f;         // stroke from this far ahead of the shoulder to as far behind
+        const float PaddlePress = .04f;         // push this far into the ground during the stroke
+        const float HopSpeed = 4f;              // m/s upward for Space
+        const float RegrabDelay = .5f;
+        const float LogInterval = .5f;
+
+        static readonly AccessTools.FieldRef<GTPlayer, HoverboardVisual> visualRef =
+            AccessTools.FieldRefAccess<GTPlayer, HoverboardVisual>("hoverboardVisual");
+
+        public AnimatorBase returnTo;
+        InteractionPoint handle;
+        float grabStart, paddlePhase, nextLog;
+        bool wasHeld;
+
+        static InteractionPoint[] handles = new InteractionPoint[0];
+        static float lastSearch = -100, lastRelease = -100;
+
+        static float Scale => GTPlayer.Instance.scale;
+        static bool GrabHeld => Mouse.current.leftButton.isPressed || Mouse.current.rightButton.isPressed;
+        static HoverboardVisual Visual { get { try { return visualRef(GTPlayer.Instance); } catch { return null; } } }
+        static bool Riding => GTPlayer.Instance.enableHoverMode && Visual && Visual.IsHeld;
+        static bool IsBoardHandle(InteractionPoint point) =>
+            point && (point.Holdable is HoverboardHandle || point.Holdable is FreeHoverboardHandle);
+
+        /// <summary>Called while walking; grabs a nearby hoverboard while a mouse button is held.</summary>
+        public static void CheckGrab()
+        {
+            var plugin = Plugin.Instance;
+            if (!plugin.IsWalking || !GrabHeld || Time.time - lastRelease < RegrabDelay) return;
+            if (!GTPlayer.Instance.isHoverAllowed) return; // the game only lets you grab boards in hover areas
+
+            if (Time.time - lastSearch > 5)
+            {
+                handles = FindObjectsByType<InteractionPoint>(FindObjectsSortMode.None).Where(IsBoardHandle).ToArray();
+                lastSearch = Time.time;
+            }
+            Vector3 head = GTPlayer.Instance.headCollider.transform.position;
+            float bestDistance = GrabReach * Scale;
+            InteractionPoint best = null;
+            foreach (var candidate in handles)
+            {
+                if (!candidate || !candidate.isActiveAndEnabled) continue;
+                float distance = candidate.transform.position.Distance(head);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = candidate;
+                }
+            }
+            if (!best) return;
+
+            var animator = plugin.hoverboardAnimator as HoverboardAnimator;
+            animator.returnTo = Rig.Instance.Animator;
+            animator.handle = best;
+            Rig.Instance.Animator = animator;
+        }
+
+        public override void Setup()
+        {
+            HeadDriver.Instance.LockCursor = true;
+            HeadDriver.Instance.turn = true;
+            grabStart = Time.time;
+            wasHeld = false;
+            Logging.Info("Hoverboard: reaching for", handle ? handle.transform.GetPath() : "nothing");
+        }
+
+        public override void Cleanup()
+        {
+            base.Cleanup(); // releases grip and hides the controllers again, which drops the board
+            leftHand.followRate = rightHand.followRate = .1f;
+            EquipmentInteractorPatch.injectLeft = EquipmentInteractorPatch.injectRight = null;
+            lastRelease = Time.time;
+        }
+
+        void Leave(string why)
+        {
+            Logging.Info("Hoverboard: leaving -", why);
+            Rig.Instance.Animator = returnTo ? returnTo : Plugin.Instance.walkAnimator;
+        }
+
+        void Update()
+        {
+            if (!Plugin.Instance.Enabled || rig == null) return;
+            if (!GrabHeld)
+            {
+                Leave("let go");
+                return;
+            }
+            if (wasHeld && Keyboard.current.spaceKey.wasPressedThisFrame)
+                rigidbody.linearVelocity += Gravity.Up * HopSpeed * Scale;
+        }
+
+        public override void Animate()
+        {
+            if (rig == null) return;
+            bool held = Riding;
+            if (held && !wasHeld)
+                Logging.Info("Hoverboard: riding (left handed:", Visual.IsLeftHanded, ")");
+            if (!held && wasHeld)
+            {
+                // The game took it away (left the hover area, ...)
+                Leave("the game dropped the board");
+                return;
+            }
+            wasHeld = held;
+
+            foreach (var hand in new[] { leftHand, rightHand })
+            {
+                // Real hand positions matter: the game grabs with them, and paddling is real contact
+                hand.hideControllerTransform = false;
+                hand.followInBodySpace = true;
+                hand.followRate = .6f;
+            }
+
+            if (!held)
+            {
+                Reach();
+                return;
+            }
+            EquipmentInteractorPatch.injectLeft = EquipmentInteractorPatch.injectRight = null;
+
+            // The game's hover physics moves the body
+            rig.active = false;
+            var visual = Visual;
+            var holding = visual.IsLeftHanded ? leftHand : rightHand;
+            var free = visual.IsLeftHanded ? rightHand : leftHand;
+            holding.grip = true;
+            free.grip = false;
+            // The board follows the visible hand and grip keeps it held, so the holding hand's real
+            // controller can stay tucked in the body (down by the ground it could otherwise count as
+            // touching it and shove you around); only the paddling hand needs real contact
+            holding.hideControllerTransform = true;
+
+            Steer(holding, visual);
+            Paddle(free);
+            LogDiagnostics(holding, visual);
+        }
+
+        // Reach for the handle with the right hand and squeeze until the game picks it up
+        void Reach()
+        {
+            if (!handle || Time.time - grabStart > GrabTimeout)
+            {
+                Leave("couldn't grab the board" + (GTPlayer.Instance.isHoverAllowed ? "" : " (not in a hover area)"));
+                return;
+            }
+            float s = Scale;
+            Vector3 point = handle.transform.position;
+            rightHand.Place(point, -body.forward, Vector3.ProjectOnPlane(point - body.position, Gravity.Up));
+            bool onHandle = rightHand.transform.position.Distance(point) < OnHandleDistance * s;
+            bool squeezePhase = Mathf.Repeat(Time.time - grabStart, SqueezePeriod) > SqueezePeriod * .3f;
+            rightHand.grip = onHandle && squeezePhase;
+            EquipmentInteractorPatch.injectRight = handle;
+            leftHand.targetPosition = leftHand.DefaultPosition;
+        }
+
+        // Angle the holding hand so the board (held at a fixed offset from the rig's hand) lies under
+        // the body, pointing where you face, rolled by A/D to carve. The rig's hand follows the hand
+        // driver with an offset of its own, so both offsets are measured live rather than guessed.
+        void Steer(HandDriver holding, HoverboardVisual visual)
+        {
+            float s = Scale;
+            Vector3 up = Gravity.Up;
+            Vector3 facing = Gravity.Flatten(body.forward).normalized;
+            if (facing == Vector3.zero) return;
+            float carve = -InputHandler.inputDirection.x * CarveDegrees;
+            Quaternion boardRotation = Quaternion.AngleAxis(carve, facing) * Quaternion.LookRotation(facing, up);
+            Vector3 boardPosition = body.position - up * BoardDrop * s;
+
+            // Board = rig hand * nominal offset, so the rig hand needs to be here
+            Quaternion rigHandRotation = boardRotation * Quaternion.Inverse(visual.NominalLocalRotation);
+            Transform rigHand = RigHand(holding.isLeft);
+            Vector3 rigHandPosition = boardPosition - rigHandRotation * Vector3.Scale(visual.NominalLocalPosition, rigHand ? rigHand.lossyScale : Vector3.one);
+
+            // The rig hand = hand driver * its own offset, so the hand driver needs to be here
+            Quaternion driverRotation = rigHandRotation;
+            Vector3 driverPosition = rigHandPosition;
+            if (rigHand)
+            {
+                Quaternion rotationOffset = Quaternion.Inverse(holding.transform.rotation) * rigHand.rotation;
+                driverRotation = rigHandRotation * Quaternion.Inverse(rotationOffset);
+                driverPosition = rigHandPosition - (rigHand.position - holding.transform.position);
+            }
+            holding.targetPosition = driverPosition;
+            // Aim far along the direction so the hand's angle doesn't depend on where it is yet
+            holding.lookAt = driverPosition + driverRotation * Vector3.forward * 100;
+            holding.up = driverRotation * Vector3.up;
+        }
+
+        static Transform RigHand(bool left)
+        {
+            var rig = GorillaTagger.Instance.offlineVRRig;
+            var map = left ? rig.leftHand : rig.rightHand;
+            return map != null ? map.rigTarget : null;
+        }
+
+        // Holding W: the free hand plants on the ground ahead, sweeps back along it, then lifts and
+        // comes forward again. The game turns hand-on-ground movement into speed.
+        void Paddle(HandDriver hand)
+        {
+            float s = Scale;
+            Vector3 up = Gravity.Up;
+            Vector3 facing = Gravity.Flatten(body.forward).normalized;
+            bool paddling = InputHandler.inputDirection.z > 0;
+            if (!paddling)
+            {
+                paddlePhase = 0;
+                hand.Place(hand.DefaultPosition, up, facing);
+                return;
+            }
+            paddlePhase = Mathf.Repeat(paddlePhase + Time.deltaTime / PaddlePeriod, 1);
+
+            Vector3 shoulder = hand.DefaultPosition;
+            Vector3 ground = shoulder - up * 2 * s;
+            if (Physics.Raycast(shoulder + up * .3f * s, -up, out RaycastHit hit, 3 * s, GTPlayer.Instance.locomotionEnabledLayers))
+                ground = hit.point;
+            Vector3 groundUnderShoulder = shoulder + Vector3.Project(ground - shoulder, up);
+
+            Vector3 position;
+            if (paddlePhase < .6f)
+            {
+                // Stroke: on (slightly into) the ground, ahead to behind
+                float t = paddlePhase / .6f;
+                position = groundUnderShoulder + facing * Mathf.Lerp(PaddleReach, -PaddleReach, t) * s - up * PaddlePress * s;
+            }
+            else
+            {
+                // Recovery: lift and swing forward
+                float t = (paddlePhase - .6f) / .4f;
+                position = Vector3.Lerp(groundUnderShoulder - facing * PaddleReach * s, groundUnderShoulder + facing * PaddleReach * s, t)
+                    + up * Mathf.Sin(t * Mathf.PI) * .25f * s;
+            }
+            hand.Place(position, up, facing);
+        }
+
+        void LogDiagnostics(HandDriver holding, HoverboardVisual visual)
+        {
+            if (Time.time < nextLog) return;
+            nextLog = Time.time + LogInterval;
+            var player = GTPlayer.Instance;
+            Transform board = visual.transform;
+            Vector3 facing = Gravity.Flatten(body.forward).normalized;
+            float pointingError = Vector3.Angle(Gravity.Flatten(board.forward), facing);
+            float tilt = Vector3.Angle(board.up, Gravity.Up);
+            bool paddleTouching = false;
+            try
+            {
+                var free = visual.IsLeftHanded ? player.RightHand : player.LeftHand;
+                paddleTouching = Traverse.Create(free).Field("isColliding").GetValue<bool>();
+            }
+            catch { }
+            var traverse = Traverse.Create(player);
+            Logging.Info($"Hoverboard: speed {rigidbody.linearVelocity.magnitude:0.0} m/s, " +
+                $"hovering {traverse.Field("didHoverLastFrame").GetValue<bool>()}, " +
+                $"hover point {traverse.Field("hasHoverPoint").GetValue<bool>()}, " +
+                $"allowed {player.isHoverAllowed}, board points {pointingError:0}° off facing, " +
+                $"board tilt {tilt:0}°, board {(board.position - body.position).magnitude:0.00}m from body, " +
+                $"paddle touching {paddleTouching}");
+        }
+    }
+}

@@ -2,6 +2,7 @@ using GorillaLocomotion;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using WalkSimulator.Patches;
 using WalkSimulator.Rigging;
 using WalkSimulator.Tools;
 
@@ -45,8 +46,6 @@ namespace WalkSimulator.Animators
         float grabStart, firstHeldTime, jumpTime = -100;
         float handForward = StartHandForward;
 
-        // Handles to slip into the game's grab checks for each hand (see EquipmentInteractorPatch)
-        public static InteractionPoint injectLeft, injectRight;
         bool wasHeld;
 
         // The rig counts as grounded with ground ~1.3m below, so ignore that right after a jump
@@ -126,7 +125,7 @@ namespace WalkSimulator.Animators
             base.Cleanup();
             leftHand.followRate = rightHand.followRate = .1f;
             lastRelease = Time.time;
-            injectLeft = injectRight = null;
+            EquipmentInteractorPatch.injectLeft = EquipmentInteractorPatch.injectRight = null;
             try
             {
                 if (IsHeld)
@@ -209,7 +208,7 @@ namespace WalkSimulator.Animators
                     // The game only grabs handles its hand collider is touching, which doesn't always
                     // register (e.g. from the ground), so also put the handle in its overlap list
                     var inject = holding ? null : handle;
-                    if (hand.isLeft) injectLeft = inject; else injectRight = inject;
+                    if (hand.isLeft) EquipmentInteractorPatch.injectLeft = inject; else EquipmentInteractorPatch.injectRight = inject;
                     if (holding)
                         hand.grip = hand.trigger = true;
                     else
@@ -221,7 +220,7 @@ namespace WalkSimulator.Animators
                 }
                 return;
             }
-            injectLeft = injectRight = null;
+            EquipmentInteractorPatch.injectLeft = EquipmentInteractorPatch.injectRight = null;
 
             // Full grip with every hand that's holding it
             foreach (var hand in new[] { leftHand, rightHand })
