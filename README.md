@@ -48,7 +48,6 @@ Without a VR headset, you start in walk mode. With a headset connected, you star
 | Space while holding a direction into a wall | Wall jump (repeat to climb) |
 | Ctrl | Crouch |
 | Hold left / right click | Grab a zipline, rope, glider or broomstick |
-| F6 | Switch between the new walk and the classic walk animation |
 
 Walking onto icy surfaces makes you slide. Walking into deep water switches to swimming automatically.
 
@@ -130,7 +129,6 @@ Settings are in `BepInEx/config/com.kylethescientist.gorillatag.walksimulator.cf
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| Animation › Classic Walk | false | Use the original walk animation instead of the new one (F6 in game) |
 | Interface › Show Controls | true | Show the controls overlay (H in game) |
 
 ## Building

@@ -54,19 +54,16 @@ namespace WalkSimulator.Menus
                 return lines;
             }
 
-            if (animator == plugin.proceduralWalkAnimator || animator == plugin.classicWalkAnimator)
+            if (animator == plugin.walkAnimator)
             {
-                bool classic = animator == plugin.classicWalkAnimator;
-                lines.Add((classic ? "Walk (classic)" : "Walk", ""));
+                lines.Add(("Walk", ""));
                 lines.Add(("WASD", "Move"));
                 lines.Add(("Mouse", "Look"));
                 lines.Add(("Shift", "Sprint"));
                 lines.Add(("Space", "Jump"));
-                if (!classic)
-                    lines.Add(("Space + into wall", "Wall jump (repeat to climb)"));
+                lines.Add(("Space + into wall", "Wall jump (repeat to climb)"));
                 lines.Add(("Ctrl", "Crouch"));
                 lines.Add(("Hold click", "Grab a zipline, rope, glider or broom"));
-                lines.Add(("F6", classic ? "Switch to new walk" : "Switch to classic walk"));
             }
             else if (animator == plugin.flyAnimator)
             {

@@ -65,6 +65,7 @@ namespace WalkSimulator.Rigging
         void LateUpdate()
         {
             if (!head) return;
+            AlignCameraWithGravity();
 
             // First person: look through the game's own camera from the head. While the game's
             // overlay is up (loading screen, report menu), leave the camera to the game.
@@ -93,8 +94,9 @@ namespace WalkSimulator.Rigging
                 if (facing.sqrMagnitude > .0001f)
                     GorillaTagger.Instance.offlineVRRig.headConstraint.rotation =
                         Quaternion.LookRotation(facing, up) * Quaternion.Euler(pitch, 0, 0);
+                // The third-person orbit flips over past about 60 degrees, so cap it there
                 if (thirpyTarget)
-                    thirpyTarget.localEulerAngles = new Vector3(pitch, 0, 0);
+                    thirpyTarget.localEulerAngles = new Vector3(Mathf.Clamp(pitch, -ThirdPersonPitchLimit, ThirdPersonPitchLimit), 0, 0);
                 GTPlayer.Instance.headCollider.transform.localEulerAngles = new Vector3(pitch, 0, 0);
             }
         }
@@ -108,6 +110,28 @@ namespace WalkSimulator.Rigging
 
         bool firstPerson;
         float pitch;
+        const float ThirdPersonPitchLimit = 60;
+
+        // The third-person camera measures its height offset along the brain's world up, which is
+        // world up by default, so it drifted "above" you when a gravity zone turned you upside down.
+        // Point it along gravity instead while the mod is active.
+        Unity.Cinemachine.CinemachineBrain brain;
+        Transform gravityUp, previousWorldUp;
+
+        void AlignCameraWithGravity()
+        {
+            if (!brain)
+            {
+                var camera = ShoulderCameraControl.Camera;
+                brain = camera ? camera.GetComponentInChildren<Unity.Cinemachine.CinemachineBrain>(true) : null;
+                if (!brain) return;
+                previousWorldUp = brain.WorldUpOverride;
+            }
+            if (!gravityUp)
+                gravityUp = new GameObject("WalkSim Gravity Up").transform;
+            gravityUp.rotation = Quaternion.FromToRotation(Vector3.up, Gravity.Up);
+            brain.WorldUpOverride = gravityUp;
+        }
         const float FirstPersonFieldOfView = 90;
 
         internal void ToggleCam()
@@ -132,6 +156,8 @@ namespace WalkSimulator.Rigging
         void OnDisable()
         {
             ShoulderCameraControl.Release(this);
+            if (brain && brain.WorldUpOverride == gravityUp)
+                brain.WorldUpOverride = previousWorldUp;
             if (!head) return;
             LockCursor = false;
             GorillaTagger.Instance.offlineVRRig.head.rigTarget = head;

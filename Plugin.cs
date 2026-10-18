@@ -26,8 +26,7 @@ namespace WalkSimulator
         public static bool IsSteam { get; protected set; }
         private static bool _enabled = true;
         public AnimatorBase 
-            proceduralWalkAnimator,
-            classicWalkAnimator,
+            walkAnimator,
             flyAnimator, 
             emoteAnimator, 
             handAnimator,
@@ -37,21 +36,9 @@ namespace WalkSimulator
             ropeAnimator,
             gliderAnimator,
             broomAnimator;
-        public static ConfigEntry<bool> ClassicWalk, ShowControls;
+        public static ConfigEntry<bool> ShowControls;
 
-        // Whichever walk style is selected
-        public AnimatorBase walkAnimator => ClassicWalk.Value ? classicWalkAnimator : proceduralWalkAnimator;
-
-        public bool IsWalking => Rig.Instance && Rig.Instance.Animator &&
-            (Rig.Instance.Animator == proceduralWalkAnimator || Rig.Instance.Animator == classicWalkAnimator);
-
-        public void ToggleWalkStyle()
-        {
-            ClassicWalk.Value = !ClassicWalk.Value;
-            Logging.Info("Walk style:", ClassicWalk.Value ? "classic" : "procedural");
-            if (IsWalking)
-                Rig.Instance.Animator = walkAnimator;
-        }
+        public bool IsWalking => Rig.Instance && Rig.Instance.Animator && Rig.Instance.Animator == walkAnimator;
         public ComputerGUI computerGUI;
         public ControlsOverlay controlsOverlay;
         public AssetBundle bundle;
@@ -70,8 +57,7 @@ namespace WalkSimulator
                 {
                     this.gameObject.GetOrAddComponent<InputHandler>();
                     this.gameObject.GetOrAddComponent<Rig>();
-                    proceduralWalkAnimator = this.gameObject.GetOrAddComponent<WalkAnimator>();
-                    classicWalkAnimator = this.gameObject.GetOrAddComponent<ClassicWalkAnimator>();
+                    walkAnimator = this.gameObject.GetOrAddComponent<WalkAnimator>();
                     flyAnimator = this.gameObject.GetOrAddComponent<FlyAnimator>();
                     emoteAnimator = this.gameObject.GetOrAddComponent<EmoteAnimator>();
                     handAnimator = this.gameObject.GetOrAddComponent<PoseAnimator>();
@@ -91,7 +77,7 @@ namespace WalkSimulator
                     controlsOverlay = this.gameObject.GetOrAddComponent<ControlsOverlay>();
                     // This runs again on every modded room join/leave, so leave the animator
                     // that's in use running (its Update handles things like jumping)
-                    foreach (var animator in new[] { proceduralWalkAnimator, classicWalkAnimator, flyAnimator, emoteAnimator, handAnimator, grabAnimator, swimAnimator, ziplineAnimator, ropeAnimator, gliderAnimator, broomAnimator })
+                    foreach (var animator in new[] { walkAnimator, flyAnimator, emoteAnimator, handAnimator, grabAnimator, swimAnimator, ziplineAnimator, ropeAnimator, gliderAnimator, broomAnimator })
                         animator.enabled = animator == Rig.Instance.Animator;
                     StartCoroutine(SelectDefaultAnimator());
                 }
@@ -99,8 +85,7 @@ namespace WalkSimulator
                 {
                     InputHandler.Instance?.Obliterate();
                     Rig.Instance?.Obliterate();
-                    proceduralWalkAnimator?.Obliterate();
-                    classicWalkAnimator?.Obliterate();
+                    walkAnimator?.Obliterate();
                     flyAnimator?.Obliterate();
                     emoteAnimator?.Obliterate();
                     handAnimator?.Obliterate();
@@ -156,8 +141,6 @@ namespace WalkSimulator
         {
             Instance = this;
             Logging.Init();
-            ClassicWalk = Config.Bind("Animation", "Classic Walk", false,
-                "Use the original walk animation instead of the procedural one. Toggle in game with F6.");
             ShowControls = Config.Bind("Interface", "Show Controls", true,
                 "Show the controls for the current mode in the corner of the screen. Toggle in game with H.");
 

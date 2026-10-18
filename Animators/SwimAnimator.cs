@@ -45,6 +45,11 @@ namespace WalkSimulator.Animators
         static readonly Collider[] overlaps = new Collider[8];
         static WaterVolume currentWater;
 
+        // What kind of liquid you're in. Besides water there's lava (not swimmable) and "swim in
+        // air" zones, where the game lets you float and swim through the air (no surface to float at)
+        static GTPlayer.LiquidType Liquid => currentWater ? currentWater.LiquidType : GTPlayer.LiquidType.Water;
+        static bool InAir => Liquid == GTPlayer.LiquidType.SwimInAir;
+
         static readonly AccessTools.FieldRef<GTPlayer, List<WaterCurrent>> activeCurrentsRef =
             AccessTools.FieldRefAccess<GTPlayer, List<WaterCurrent>>("activeWaterCurrents");
         readonly List<WaterCurrent> currents = new List<WaterCurrent>();
@@ -103,7 +108,9 @@ namespace WalkSimulator.Animators
 
             // Deep enough, or in water with no floor under you (the game's buoyancy keeps you near
             // the surface, so dropping in from above never gets you deep)
-            if (DepthBelowSurface(rig.body.position, out float depth) && (depth > EnterDepth * Scale || !rig.onGround))
+            if (!DepthBelowSurface(rig.body.position, out float depth) || Liquid == GTPlayer.LiquidType.Lava) return;
+            // In swim-in-air zones, walk on the floor and swim once you leave it
+            if (InAir ? !rig.onGround : (depth > EnterDepth * Scale || !rig.onGround))
             {
                 var swim = plugin.swimAnimator as SwimAnimator;
                 swim.returnTo = Rig.Instance.Animator;
@@ -134,13 +141,13 @@ namespace WalkSimulator.Animators
         {
             if (!Plugin.Instance.Enabled || rig == null) return;
             // Out of the water, or standing on the bottom in the shallows
-            if (!DepthBelowSurface(body.position, out float depth) || (rig.onGround && depth < ExitDepth * Scale))
+            if (!DepthBelowSurface(body.position, out float depth) || (rig.onGround && (InAir || depth < ExitDepth * Scale)))
             {
                 Leave();
                 return;
             }
             // Leap out at the surface (e.g. onto a ledge)
-            if (Keyboard.current.spaceKey.wasPressedThisFrame && depth < LeapDepth * Scale)
+            if (!InAir && Keyboard.current.spaceKey.wasPressedThisFrame && depth < LeapDepth * Scale)
             {
                 lastLeap = Time.time;
                 Vector3 horizontal = Vector3.ProjectOnPlane(rigidbody.linearVelocity, Vector3.up);
@@ -163,7 +170,7 @@ namespace WalkSimulator.Animators
             Vector3 desired = (head.forward * input.z + body.right * input.x + Vector3.up * input.y) * speed;
 
             // Float back to the surface when not swimming up or down
-            if (Mathf.Approximately(input.y, 0))
+            if (!InAir && Mathf.Approximately(input.y, 0))
             {
                 float floatError = depth - FloatDepth * Scale;
                 float bob = Mathf.Sin(Time.time * 1.5f) * .05f * Scale;

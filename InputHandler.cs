@@ -43,8 +43,6 @@ namespace WalkSimulator
                 HeadDriver.Instance.LockCursor = !HeadDriver.Instance.LockCursor;
             if (Keyboard.current.cKey.wasPressedThisFrame)
                 HeadDriver.Instance.ToggleCam();
-            if (Keyboard.current.f6Key.wasPressedThisFrame)
-                Plugin.Instance.ToggleWalkStyle();
             if (Keyboard.current.vKey.wasPressedThisFrame)
                 Plugin.Instance.ToggleVRMode();
 
