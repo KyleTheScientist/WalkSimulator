@@ -6,6 +6,8 @@
 
 - **Gravity zones.** Walking, jumping, wall climbing, sliding and flying follow the zone's gravity, so you can walk on walls and ceilings. The camera stays upright and behind you.
 - **Swim-in-air zones** (like the planet room). Walk on the floor, then float and swim through the air once you leave it.
+- **Hoverboards.** Hold a mouse button near a board in a hover area to ride it with the game's own hoverboard physics. Steer with the mouse, carve with A/D, push with W and hop with Space.
+- **MIT license.**
 
 ### Changed
 
