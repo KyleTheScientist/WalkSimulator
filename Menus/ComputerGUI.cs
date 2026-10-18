@@ -24,8 +24,6 @@ namespace WalkSimulator.Menus
         AnimatorBase cachedAnimator;
         TMP_Text currentScreen;
         bool inUse;
-        Vector3 viewPosition;
-        Quaternion viewRotation;
         const float ViewFieldOfView = 90;
 
         public bool IsInUse => inUse;
@@ -103,9 +101,27 @@ namespace WalkSimulator.Menus
             RefreshScreens();
         }
 
+        // How often to recheck which screen (if any) you're in front of. Done on a timer: tying it to
+        // frame numbers inside FixedUpdate could skip checks for a long time, leaving a stale result
+        const float RangeCheckInterval = .25f, ScreenRefreshInterval = 10f;
+        float nextRangeCheck, nextScreenRefresh;
+
         void Update()
         {
-            if (Keyboard.current.eKey.wasPressedThisFrame && inRange && !inUse)
+            if (Time.time >= nextRangeCheck)
+            {
+                nextRangeCheck = Time.time + RangeCheckInterval;
+                inRange = IsInRange();
+                if (!inRange && Time.time >= nextScreenRefresh)
+                {
+                    nextScreenRefresh = Time.time + ScreenRefreshInterval;
+                    RefreshScreens();
+                }
+            }
+
+            // Check again right when E is pressed, so a stale result can't put you at a computer
+            // you've already walked away from
+            if (Keyboard.current.eKey.wasPressedThisFrame && !inUse && (inRange = IsInRange()))
             {
                 inUse = true;
                 cachedAnimator = Rig.Instance.Animator;
@@ -115,7 +131,8 @@ namespace WalkSimulator.Menus
 
             if (inUse)
             {
-                if (Keyboard.current.escapeKey.wasPressedThisFrame)
+                // Walked (or drifted) away from it, or pressed Escape
+                if (!inRange || !currentScreen || Keyboard.current.escapeKey.wasPressedThisFrame)
                 {
                     Exit();
                     return;
@@ -143,40 +160,21 @@ namespace WalkSimulator.Menus
             }
         }
 
-        void FixedUpdate()
-        {
-            if (Time.frameCount % 60 == 0)
-                inRange = IsInRange();
-
-            if (!inRange && Time.frameCount % 600 == 0)
-                RefreshScreens();
-
-            if (inRange)
-            {
-                // Square up with the screen and back off just far enough to fit all of it
-                var rect = currentScreen.rectTransform;
-                Vector3 scale = rect.lossyScale;
-                float halfWidth = rect.rect.width * Mathf.Abs(scale.x) / 2;
-                float halfHeight = rect.rect.height * Mathf.Abs(scale.y) / 2;
-                float tanHalfFov = Mathf.Tan(ViewFieldOfView * Mathf.Deg2Rad / 2);
-                var camera = ShoulderCameraControl.Camera;
-                float aspect = camera ? camera.aspect : 16f / 9f;
-                float distance = Mathf.Max(halfHeight, halfWidth / aspect) / tanHalfFov * 1.15f;
-                viewRotation = Quaternion.LookRotation(rect.forward, rect.up);
-                viewPosition = ScreenCenter(currentScreen) - rect.forward * distance;
-            }
-            else if (inUse)
-            {
-                Exit();
-            }
-        }
-
-        // Look at the screen through the game's own camera
+        // Look at the screen through the game's own camera: square up with it and back off just far
+        // enough to fit all of it
         void LateUpdate()
         {
-            if (!inUse) return;
+            if (!inUse || !currentScreen) return;
+            var rect = currentScreen.rectTransform;
+            Vector3 scale = rect.lossyScale;
+            float halfWidth = rect.rect.width * Mathf.Abs(scale.x) / 2;
+            float halfHeight = rect.rect.height * Mathf.Abs(scale.y) / 2;
+            float tanHalfFov = Mathf.Tan(ViewFieldOfView * Mathf.Deg2Rad / 2);
+            var camera = ShoulderCameraControl.Camera;
+            float aspect = camera ? camera.aspect : 16f / 9f;
+            float distance = Mathf.Max(halfHeight, halfWidth / aspect) / tanHalfFov * 1.15f;
             ShoulderCameraControl.Take(this, ViewFieldOfView);
-            ShoulderCameraControl.Place(viewPosition, viewRotation);
+            ShoulderCameraControl.Place(ScreenCenter(currentScreen) - rect.forward * distance, Quaternion.LookRotation(rect.forward, rect.up));
         }
 
         void Exit()
