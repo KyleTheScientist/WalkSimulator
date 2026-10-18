@@ -135,4 +135,4 @@ Settings are in `BepInEx/config/com.kylethescientist.gorillatag.walksimulator.cf
 
 1. Set `GamePath` in `Directory.Build.props` to your Gorilla Tag install. BepInEx and Utilla need to be installed there, since the project references them.
 2. Run `dotnet build`. The DLL is copied into your game's `BepInEx/plugins/WalkSimulator` folder automatically. Close the game first, or the copy fails because the DLL is in use.
-3. To make a release zip, run `MakeRelease.ps1`. It produces `WalkSimulator-v<version>.zip`.
+3. To make a release, add a `## <version>` section to `CHANGELOG.md`, set the version in `PluginInfo.cs`, and run `MakeRelease.ps1`. It produces `WalkSimulator-v<version>.zip` and writes that version's changelog section to `Release.md`, ready for `gh release create v<version> WalkSimulator-v<version>.zip --notes-file Release.md`.
